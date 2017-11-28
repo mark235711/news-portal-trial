@@ -1,0 +1,52 @@
+
+.articleTitle
+{
+  #background-color: #00cc00;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 32px;
+  text-align:left;
+}
+
+.Article
+{
+  #width: 500px;
+  #margin-left: auto;
+  #margin-right: auto;
+  #min-height: 200px;
+  #background-color: #00cc00;
+}
+.Article p
+{
+  font-family: "Open Sans";
+  text-align: left;
+}
+.Article h1
+{
+  text-align: left;
+  font-family: "Open Sans";
+  font-size: 22px;
+}
+.Article h2
+{
+  text-align: left;
+  font-family: "Open Sans";
+  font-size: 20px;
+}
+.Article h3
+{
+  text-align: left;
+  font-family: "Open Sans";
+  font-size: 18px;
+}
+.Article ul
+{
+  #text-align: left;
+  font-family: "Open Sans";
+
+}
+.Article ol
+{
+  #text-align: center;
+  font-family: "Open Sans";
+
+}
