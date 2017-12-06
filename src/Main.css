@@ -28,3 +28,11 @@ textarea
   width: 100px;
   text-align: center;
 }
+.WarningTooltip > .tooltip-inner
+{
+  background-color: #ff0000;
+}
+.WarningTooltip.tooltip.top > .tooltip-arrow
+{
+  border-top-color: #ff0000;
+}

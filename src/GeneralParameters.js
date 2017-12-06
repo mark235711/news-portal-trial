@@ -16,7 +16,11 @@ export const MAX_CHAR_NOT_UPDATED = 15;
 //used in MyEditor and EDitArticle, the maximum amount of time before an autosave can occur
 export const MAX_WAIT_AUTOSAVE = 10000; //in miliseconds, 1000 = 1 sec
 
+
+
 //urls used for different functionality
+
+export const GET_USER_DATA_URL = 'http://homestead.app/getuserdata'; //only used for testing
 
 //urls used in the EditArticle
 export const LOAD_ARTICLE_URL = 'http://homestead.app/loadarticle';
@@ -30,5 +34,13 @@ export const PUSH_BACK_ARTICLE_URL = 'http://homestead.app/pushbackarticle';
 
 //urls used in ViewArticles
 export const VIEW_ALL_ARTICLES_URL = 'http://homestead.app/viewallarticles';
+export const VIEW_ALL_YOUR_ARTICLES_URL = 'http://homestead.app/viewallyourarticles';
 export const VIEW_ALL_PENDING_ARTICLES_URL = 'http://homestead.app/viewallpendingarticles';
 export const VIEW_ALL_PUBLISHED_ARTICLES_URL = 'http://homestead.app/viewallpublishedarticles';
+
+export const POST_COMMENT_URL = 'http://homestead.app/commentOnArticle';
+export const DELETE_COMMENT_URL = 'http://homestead.app/deleteComment';
+export const LIKE_COMMENT_URL = 'http://homestead.app/likeComment';
+export const LIKE_ARTICLE_URL = 'http://homestead.app/likeArticle';
+//urls used in Article
+export const VIEW_ALL_COMMENTS_FOR_ARTICLE_URL = 'http://homestead.app/viewAllArticleComments';

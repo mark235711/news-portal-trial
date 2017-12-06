@@ -1,11 +1,24 @@
 import React, { Component } from 'react';
+import ReactDOM from 'react-dom';
 import MenuBarContainer from '../Containers/MenuBarContainer';
 import '../Main.css';
 import MyEditorContainer from '../Containers/MyEditorContainer';
 import ArticleContainer from '../Containers/ArticleContainer';
-import {Row, Col, Grid, Button, Modal, Panel, FormControl} from 'react-bootstrap';
-import { editArticlePopups , pageValues } from '../actions'
-
+import {Row, Col, Grid, Button, Modal, Panel, FormControl, Clearfix, Tooltip, Overlay, Fade} from 'react-bootstrap';
+import { editArticlePopups , pageValues, savingInfoTypes } from '../actions'
+import {
+  AUTOSAVE_CHANGE_LIMIT,
+  TEASER_TEXT_MAX_LINES,
+  TEASER_TEXT_CHAR_LINE_LIMIT,
+  MAX_WAIT_AUTOSAVE,
+  LOAD_ARTICLE_URL,
+  CREATE_ARTICLE_URL,
+  EDIT_ARTICLE_URL,
+  DELETE_ARTICLE_URL,
+  SUBMIT_ARTICLE_FOR_REVIEW_URL,
+  PUBLISH_ARTICLE_URL,
+  PUSH_BACK_ARTICLE_URL,
+} from '../GeneralParameters'
 class EditArticle extends Component {
 
   constructor(props)
@@ -16,6 +29,7 @@ class EditArticle extends Component {
     this.titleOnChange = this._titleOnChange.bind(this);
     this.teaserOnChange = this._teaserOnChange.bind(this);
     this.saveArticle = this._saveArticle.bind(this);
+    this.savingPopupTimeout = this._savingPopupTimeout.bind(this);
     this.loadArticle = this._loadArticle.bind(this);
     this.deleteArticle = this._deleteArticle.bind(this);
     this.submitForPublishing = this._submitForPublishing.bind(this);
@@ -23,6 +37,7 @@ class EditArticle extends Component {
     this.pushbackForEditing = this._pushbackForEditing.bind(this);
     this.toggleCreateSectionPopup = this._toggleCreateSectionPopup.bind(this);
     this.loadTemplate = this._loadTemplate.bind(this);
+    this.titleTooltipTimeout = this._titleTooltipTimeout.bind(this);
     if(this.props.createMode !== true)
     {
       this.loadArticle();
@@ -33,15 +48,49 @@ class EditArticle extends Component {
     }
   }
 
+  componentWillReceiveProps(nextProps) {
+    //console.log(nextProps.autosaveCounter);
+    if(nextProps.autosaveCounter >= AUTOSAVE_CHANGE_LIMIT || nextProps.autosaveCounter === -1) //-1 for force autosave
+    {
+      clearTimeout(this.autsaveTimeout);
+      //console.log(this.props.articleID);
+      if(this.props.articleID != null)
+      {
+        this.saveArticle(true);
+      }
+      else
+        console.log('failed to autosave');
+
+      nextProps.setAutosaveCounter(0);
+    }
+    else if(nextProps.autosaveCounter > this.props.autosaveCounter && this.props.autosaveCounter !== -1)
+    {
+      if(this.autsaveTimeout != null)
+      {
+        clearTimeout(this.autsaveTimeout);
+      }
+
+      var editArticle = this;
+      this.autsaveTimeout = setTimeout(
+        function(){
+
+          //sends the update to the redux state
+          if(editArticle.props.articleID != null)
+          {
+            editArticle.saveArticle(true);
+          }
+          console.log('on autosave update');
+
+      }, MAX_WAIT_AUTOSAVE);
+    }
+  }
 
   _titleOnChange(e) {
     if(e.target.value.length === 255)
       alert('max character limit reached for title');
-    this.props.setTitle(e.target.value);
+    this.props.setTitle(e.target.value, true);
   }
   _teaserOnChange(e) {
-    const maxLines = 4;
-    const charRowLimit = 40;
     var output = '';
     var currentLines = 1;
     var currentRow = 0;
@@ -50,7 +99,7 @@ class EditArticle extends Component {
     {
       if(e.target.value[i] === '\n') //newLine
       {
-        if(currentLines < maxLines)
+        if(currentLines < TEASER_TEXT_MAX_LINES)
         {
             currentLines++;
             currentRow = 0;
@@ -59,12 +108,12 @@ class EditArticle extends Component {
         }
         else
         {
-          if(currentRow < charRowLimit)
+          if(currentRow < TEASER_TEXT_CHAR_LINE_LIMIT)
           {
             output+= e.target.value[i];
             currentRow++;
           }
-          else if(currentLines < maxLines)
+          else if(currentLines < TEASER_TEXT_MAX_LINES)
           {
             currentLines++;
             currentRow = 0;
@@ -77,12 +126,13 @@ class EditArticle extends Component {
       if(e.target.value.length === 255 || characterLimitReached)
       alert('max character limit reached for teaser Text');
       //this.setState({teaser: output});
-      this.props.setTeaser(output);
+      this.props.setTeaser(output, true);
   }
   _loadArticle() {
     if(this.props.articleID != null) //load the article
     {
-      fetch('http://homestead.app/loadarticle', {
+      this.props.setEditArticleLoading(true);
+      fetch(LOAD_ARTICLE_URL, {
         method:'POST',
         headers: {
           'Accept': 'application/json',
@@ -105,29 +155,30 @@ class EditArticle extends Component {
             size = 1;
             newEditorSections.push(size);
         });
-        this.props.setTitle(title);
-        this.props.setTeaser(teaser);
+        this.props.setTitle(title, false);
+        this.props.setTeaser(teaser, false);
         this.props.setContent(content);
         this.props.setEditArticlePublished(newPublished);
         this.props.setUpdateEditors(true);
-        //this.forceUpdate();
+        this.props.setEditArticleLoading(false);
       })
       .catch((error) => {
         console.error(error);
       });
     }
   }
-  _saveArticle() {
+  _saveArticle(autosaving = false) {
     if(this.props.title === '')
     {
-      alert('title cannot be null');
+      this.props.setShowTitleTooltip(true);
       return;
     }
 
     if(this.props.articleID == null) //create new article
     {
-      fetch('http://homestead.app/createarticle', {
-        //fetch('https://httpbin.org/post', {
+      this.props.setSavingInfo(savingInfoTypes.SAVING);
+
+      fetch(CREATE_ARTICLE_URL, {
         method:'POST',
         headers: {
           'Accept': 'application/json',
@@ -143,6 +194,9 @@ class EditArticle extends Component {
       .then((responseJson) => {
         this.props.setArticleID(responseJson.id);
         console.log(responseJson);
+
+        this.props.setSavingInfo(savingInfoTypes.SAVECOMPLETE);
+        this.savingPopupTimeout();
       })
       .catch((error) => {
         console.error(error);
@@ -150,8 +204,12 @@ class EditArticle extends Component {
     }
     else //save to esisting entry
     {
-      fetch('http://homestead.app/editarticle', {
-        //fetch('https://httpbin.org/post', {
+      if(autosaving)
+        this.props.setSavingInfo(savingInfoTypes.AUTOSAVING);
+      else
+        this.props.setSavingInfo(savingInfoTypes.SAVING);
+
+      fetch(EDIT_ARTICLE_URL, {
         method:'POST',
         headers: {
           'Accept': 'application/json',
@@ -167,18 +225,28 @@ class EditArticle extends Component {
       .then((response) => response.json())
       .then((responseJson) => {
         console.log(responseJson);
+        this.props.setSavingInfo(savingInfoTypes.SAVECOMPLETE);
+        this.savingPopupTimeout();
       })
       .catch((error) => {
         console.error(error);
       });
     }
   }
+  _savingPopupTimeout() {
+
+    var editArticle = this;
+
+    setTimeout(function() {
+      editArticle.props.setSavingInfo(savingInfoTypes.NONE);
+    }, 2000);
+  }
   _deleteArticle() {
     this.props.setPopupType(editArticlePopups.NONE);
 
     if(this.props.articleID != null) //load the article
     {
-      fetch('http://homestead.app/deletearticle', {
+      fetch(DELETE_ARTICLE_URL, {
         method:'POST',
         headers: {
           'Accept': 'application/json',
@@ -191,7 +259,7 @@ class EditArticle extends Component {
       .then((response) => response.json())
       .then((responseJson) => {
         console.log(responseJson);
-        this.props.setPage(pageValues.VIEWARTICLES);
+        this.props.setPage(pageValues.VIEW_ARTICLES);
       })
       .catch((error) => {
         console.error(error);
@@ -202,8 +270,8 @@ class EditArticle extends Component {
     this.props.setPopupType(editArticlePopups.NONE);
     if(this.props.articleID != null) //load the article
     {
-      this.saveArticle();
-      fetch('http://homestead.app/submitarticleforreview', {
+      this.saveArticle(false);
+      fetch(SUBMIT_ARTICLE_FOR_REVIEW_URL, {
         method:'POST',
         headers: {
           'Accept': 'application/json',
@@ -216,7 +284,7 @@ class EditArticle extends Component {
       .then((response) => response.json())
       .then((responseJson) => {
         console.log(responseJson);
-        this.props.setPage(pageValues.VIEWARTICLES);
+        this.props.setPage(pageValues.VIEW_ARTICLES);
       })
       .catch((error) => {
         console.error(error);
@@ -227,8 +295,8 @@ class EditArticle extends Component {
     this.props.setPopupType(editArticlePopups.NONE);
     if(this.props.articleID != null) //load the article
     {
-      this.saveArticle();
-      fetch('http://homestead.app/publisharticle', {
+      this.saveArticle(false);
+      fetch(PUBLISH_ARTICLE_URL, {
         method:'POST',
         headers: {
           'Accept': 'application/json',
@@ -241,7 +309,7 @@ class EditArticle extends Component {
       .then((response) => response.json())
       .then((responseJson) => {
         console.log(responseJson);
-        this.props.setPage(pageValues.VIEWARTICLES);
+        this.props.setPage(pageValues.VIEW_ARTICLES);
       })
       .catch((error) => {
         console.error(error);
@@ -252,8 +320,8 @@ class EditArticle extends Component {
     this.props.setPopupType(editArticlePopups.NONE);
     if(this.props.articleID != null) //load the article
     {
-      this.saveArticle();
-      fetch('http://homestead.app/pushbackarticle', {
+      this.saveArticle(false);
+      fetch(PUSH_BACK_ARTICLE_URL, {
         method:'POST',
         headers: {
           'Accept': 'application/json',
@@ -266,7 +334,7 @@ class EditArticle extends Component {
       .then((response) => response.json())
       .then((responseJson) => {
         console.log(responseJson);
-        this.props.setPage(pageValues.VIEWARTICLES);
+        this.props.setPage(pageValues.VIEW_ARTICLES);
       })
       .catch((error) => {
         console.error(error);
@@ -274,16 +342,13 @@ class EditArticle extends Component {
     }
   }
 
-
   _toggleCreateSectionPopup() {
     if(this.props.showCreateSectionButtons === false)
       this.props.setShowCreateSectionButtons(true);
     else
       this.props.setShowCreateSectionButtons(false);
   }
-
-  _loadTemplate(templateValue)
-  {
+  _loadTemplate(templateValue) {
     var content = [];
     this.props.setPopupType(editArticlePopups.NONE);
     for(var i = 0; i < templateValue.length; i++)
@@ -304,11 +369,19 @@ class EditArticle extends Component {
     this.props.setContent(content);
     this.props.setUpdateEditors(true);
   }
-
+  _titleTooltipTimeout()
+  {
+    var editor = this;
+    setTimeout( function() {
+      editor.props.setShowTitleTooltip(false);
+    }, 2000);
+  }
   render() {
 
     var heading;
-    if(this.props.createMode === true)
+    if(this.props.loading === true)
+      heading = <h1>Loading</h1>;
+    else if(this.props.createMode === true)
       heading=<h1>Create Article</h1>;
     else
       heading=<h1>Edit Article</h1>;
@@ -316,6 +389,9 @@ class EditArticle extends Component {
 
     var id = 0;
     var editors = [];
+
+    if(this.props.loading === false)
+    {
 
       for(var i = 0; i < this.props.editorSectionsContent.length; i++)
       {
@@ -360,60 +436,117 @@ class EditArticle extends Component {
             </Row>;
           }
       }
+    }
+    //the following code creates the template icons (there currently just html code)
+    //the following variables are static and therefore don't use keys
+    const oneColOneLine = <div style ={{fontSize: '6px'}}>^^^^^^^^^^^^^^^^^^^^<br/></div>;
+    const twoColOneLine = <div style ={{fontSize: '6px'}}>^^^^^^^^^^&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^^^^^^^^^^<br/></div>;
+    const threeColOneLine = <div style ={{fontSize: '6px'}}>^^^^^^&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^^^^^^&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^^^^^^<br/></div>;
 
-      var key = 0;
-      //the following code creates the template icons (there currently just html code)
-      const oneColOneLine = <div style ={{fontSize: '6px'}}>^^^^^^^^^^^^^^^^^^^^<br/></div>;
-      const twoColOneLine = <div style ={{fontSize: '6px'}}>^^^^^^^^^^&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^^^^^^^^^^<br/></div>;
-      const threeColOneLine = <div style ={{fontSize: '6px'}}>^^^^^^&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^^^^^^&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^^^^^^<br/></div>;
-      var oneCol = [];
+    var oneCol = [];
+    for (let i = 0; i < 10; i++)
+      oneCol[i] = oneColOneLine;
 
-      for (let i = 0; i < 10; i++)
-        oneCol[i] = oneColOneLine;
+    var twoCol = [];
+    for (let i = 0; i < 10; i++)
+        twoCol[i] = twoColOneLine;
 
-      var twoCol = [];
-      for (let i = 0; i < 10; i++)
-          twoCol[i] = twoColOneLine;
+    var threeCol = [];
+    for (let i = 0; i < 10; i++)
+      threeCol[i] = threeColOneLine;
 
-      var threeCol = [];
-      for (let i = 0; i < 10; i++)
-        threeCol[i] = threeColOneLine;
+    var oneColTwoRow = [];
+    for (let i = 0; i < 9; i++)
+    {
+      if(i===4)
+        oneColTwoRow[i] = <br/>;
+      else
+        oneColTwoRow[i] = oneColOneLine;
+    }
 
-      var oneColTwoRow = [];
-      for (let i = 0; i < 9; i++)
-      {
-        if(i===4)
-          oneColTwoRow[i] = <br/>;
-        else
-          oneColTwoRow[i] = oneColOneLine;
-      }
+    var twoColTwoRow = [];
+    for (let i = 0; i < 9; i++)
+    {
+      if(i===4)
+        twoColTwoRow[i] = <br/>;
+      else
+        twoColTwoRow[i] = twoColOneLine;
+    }
 
-      var twoColTwoRow = [];
-      for (let i = 0; i < 9; i++)
-      {
-        if(i===4)
-          twoColTwoRow[i] = <br/>;
-        else
-          twoColTwoRow[i] = twoColOneLine;
-      }
+    var threeColTwoRow = [];
+    for (let i = 0; i < 9; i++)
+    {
+      if(i===4)
+        threeColTwoRow[i] = <br/>;
+      else
+        threeColTwoRow[i] = threeColOneLine;
+    }
 
-      var threeColTwoRow = [];
-      for (let i = 0; i < 9; i++)
-      {
-        if(i===4)
-          threeColTwoRow[i] = <br/>;
-        else
-          threeColTwoRow[i] = threeColOneLine;
-      }
+    var oneColThreeRow = [];
+    for (let i = 0; i < 8; i++)
+    {
+      if(i===2 || i===5)
+        oneColThreeRow[i] = <br/>;
+      else
+        oneColThreeRow[i] = oneColOneLine;
+    }
 
-      var oneColThreeRow = [];
-      for (let i = 0; i < 8; i++)
-      {
-        if(i===2 || i===5)
-          oneColThreeRow[i] = <br/>;
-        else
-          oneColThreeRow[i] = oneColOneLine;
-      }
+    var twoColThreeRow = [];
+    for (let i = 0; i < 8; i++)
+    {
+      if(i===2 || i===5)
+        twoColThreeRow[i] = <br/>;
+      else
+        twoColThreeRow[i] = twoColOneLine;
+    }
+
+    var threeColThreeRow = [];
+    for (let i = 0; i < 8; i++)
+    {
+      if(i===2 || i===5)
+        threeColThreeRow[i] = <br/>;
+      else
+        threeColThreeRow[i] = threeColOneLine;
+    }
+
+
+    var oneColTwoCol = [];
+    for (let i = 0; i < 9; i++)
+    {
+      if(i<4)
+        oneColTwoCol[i] = oneColOneLine;
+      else if(i>4)
+        oneColTwoCol[i] = twoColOneLine;
+      else
+        oneColTwoCol[i] = <br/>;
+
+    }
+
+    var oneColTwoColThreeCol = [];
+    for (let i = 0; i < 8; i++)
+    {
+      if(i<2)
+        oneColTwoColThreeCol[i] = oneColOneLine;
+      else if(i>2 && i<5)
+        oneColTwoColThreeCol[i] = twoColOneLine;
+      else if(i>5)
+        oneColTwoColThreeCol[i] = threeColOneLine;
+      else
+        oneColTwoColThreeCol[i] = <br/>;
+    }
+
+    var oneColTwoColOneCol = [];
+    for (let i = 0; i < 8; i++)
+    {
+      if(i<2)
+        oneColTwoColOneCol[i] = oneColOneLine;
+      else if(i>2 && i<5)
+        oneColTwoColOneCol[i] = twoColOneLine;
+      else if(i>5)
+        oneColTwoColOneCol[i] = oneColOneLine;
+      else
+        oneColTwoColOneCol[i] = <br/>;
+    }
 
     return (
       <div className='EditArticle'>
@@ -422,7 +555,12 @@ class EditArticle extends Component {
       <div>
         <Grid>
           <Row>
-            <input maxLength='255' value={this.props.title} onChange={this.titleOnChange} placeholder='Insert Title Here'></input>
+            <Overlay target={() => ReactDOM.findDOMNode(this.refs.titleInput)} show={this.props.titleTooltip}  placement="top" onEntered={this.titleTooltipTimeout}>
+            <Tooltip className='WarningTooltip' id={1}>
+              Title Cannot Be Empty
+            </Tooltip>
+            </Overlay>
+            <input maxLength='255' value={this.props.title} onChange={this.titleOnChange} placeholder='Insert Title Here' ref='titleInput'></input>
           </Row>
           <Row>
             <Col xs={6} xsOffset={3}>
@@ -440,23 +578,23 @@ class EditArticle extends Component {
         </Grid>
       </div>
       <Button onClick={this.toggleCreateSectionPopup}>Create Section</Button>
-      <Button onClick={() => this.props.setPopupType(editArticlePopups.PREVIEW_POPUP)}>Preview</Button>
-      <Button onClick={this.saveArticle}>Save</Button>
+      <Button onClick={() => {this.props.setPopupType(editArticlePopups.PREVIEW_POPUP); this.props.setShowTitleTooltip(false);}}>Preview</Button>
+      <Button onClick={() => this.saveArticle(false)}>Save</Button>
       {
         this.props.articleID !== null &&
-        <Button onClick={() => this.props.setPopupType(editArticlePopups.DELETE_POPUP)}>Delete</Button>
+        <Button onClick={() => {this.props.setPopupType(editArticlePopups.DELETE_POPUP); this.props.setShowTitleTooltip(false);}}>Delete</Button>
       }
       {
         this.props.articleID !== null && this.props.published === 0 &&
-        <Button onClick={() => this.props.setPopupType(editArticlePopups.SUBMIT_FOR_PUBLISHING_POPUP)}>Submit For Publishing</Button>
+        <Button onClick={() => {this.props.setPopupType(editArticlePopups.SUBMIT_FOR_PUBLISHING_POPUP); this.props.setShowTitleTooltip(false);}}>Submit For Publishing</Button>
       }
       {
         this.props.articleID !== null && this.props.published === 1 &&
-        <Button onClick={() => this.props.setPopupType(editArticlePopups.PUSH_BACK_FOR_EDITING_POPUP)}>Push Back For Editing</Button>
+        <Button onClick={() => {this.props.setPopupType(editArticlePopups.PUSH_BACK_FOR_EDITING_POPUP); this.props.setShowTitleTooltip(false);}}>Push Back For Editing</Button>
       }
       {
         this.props.articleID !== null && this.props.published === 1 &&
-        <Button onClick={() => this.props.setPopupType(editArticlePopups.PUBLISH_POPUP)}>Publish</Button>
+        <Button onClick={() => {this.props.setPopupType(editArticlePopups.PUBLISH_POPUP); this.props.setShowTitleTooltip(false);}}>Publish</Button>
       }
 
       {
@@ -521,10 +659,9 @@ class EditArticle extends Component {
 
       <Modal show={this.props.popupType === editArticlePopups.TEMPLATE_POPUP} onHide={() => this.props.setPopupType(editArticlePopups.NONE)}>
         <Modal.Header closeButton>
-          <Modal.Title></Modal.Title>
+          <Modal.Title>Select a Template</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <h1>Select a Template</h1>
           <Grid fluid = {true}>
             <Row>
               <Col xs={6} sm={3}>
@@ -543,6 +680,12 @@ class EditArticle extends Component {
                 </Panel>
               </Col>
               <Col xs={6} sm={3}>
+                <Panel className='articleTemplate' onClick={() => this.loadTemplate([1, 2])}>
+                  <div> {oneColTwoCol} </div>
+                </Panel>
+              </Col>
+              <Clearfix visibleSmBlock visibleMdBlock visibleLgBlock/>
+              <Col xs={6} sm={3}>
                 <Panel className='articleTemplate' onClick={() => this.loadTemplate([1, 1])}>
                   <div> {oneColTwoRow} </div>
                 </Panel>
@@ -558,17 +701,44 @@ class EditArticle extends Component {
                 </Panel>
               </Col>
               <Col xs={6} sm={3}>
+                <Panel className='articleTemplate' onClick={() => this.loadTemplate([1, 2, 3])}>
+                  <div> {oneColTwoColThreeCol} </div>
+                </Panel>
+              </Col>
+              <Clearfix visibleSmBlock visibleMdBlock visibleLgBlock/>
+              <Col xs={6} sm={3}>
                 <Panel className='articleTemplate' onClick={() => this.loadTemplate([1, 1, 1])}>
                   <div> {oneColThreeRow} </div>
                 </Panel>
               </Col>
-          </Row>
+              <Col xs={6} sm={3}>
+                <Panel className='articleTemplate' onClick={() => this.loadTemplate([2, 2, 2])}>
+                  <div> {twoColThreeRow} </div>
+                </Panel>
+              </Col>
+              <Col xs={6} sm={3}>
+                <Panel className='articleTemplate' onClick={() => this.loadTemplate([3, 3, 3])}>
+                  <div> {threeColThreeRow} </div>
+                </Panel>
+              </Col>
+              <Col xs={6} sm={3}>
+                <Panel className='articleTemplate' onClick={() => this.loadTemplate([1, 2, 1])}>
+                  <div> {oneColTwoColOneCol} </div>
+                </Panel>
+              </Col>
+            </Row>
           </Grid>
         </Modal.Body>
         <Modal.Footer>
         </Modal.Footer>
       </Modal>
-
+      <Fade in={this.props.savingInfoType !== savingInfoTypes.NONE}>
+      <Panel style={{position: 'fixed', top: 20, right: 20}}>
+        {this.props.savingInfoType === savingInfoTypes.SAVING && <p>saving...</p>}
+        {this.props.savingInfoType === savingInfoTypes.SAVECOMPLETE && <p>save complete</p>}
+        {this.props.savingInfoType === savingInfoTypes.AUTOSAVING && <p>autosaving...</p>}
+      </Panel>
+    </Fade>
       {
           this.props.popupType === editArticlePopups.PREVIEW_POPUP &&
           <ArticleContainer hidden={true} id={-1}/>

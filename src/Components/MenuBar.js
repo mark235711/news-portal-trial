@@ -20,31 +20,31 @@ class MenuBar extends Component {
       }
       {
         this.props.createAccount === true &&
-        <NavItem eventKey={3} onClick = {() => this.props.setPage(pageValues.CREATEACCOUNT)}>Create Account</NavItem>
+        <NavItem eventKey={3} onClick = {() => this.props.setPage(pageValues.CREATE_ACCOUNT)}>Create Account</NavItem>
       }
       {
         this.props.createArticle === true && (this.props.userState === userStateValues.CONTRIBUTOR || this.props.userState === userStateValues.EDITOR) &&
-        <NavItem eventKey={4} onClick = {() => {this.props.resetEditArticle(); this.props.setPage(pageValues.CREATEARTICLE);}}>Create Article</NavItem>
+        <NavItem eventKey={4} onClick = {() => {this.props.resetEditArticle(); this.props.setPage(pageValues.CREATE_ARTICLE);}}>Create Article</NavItem>
       }
       {
         this.props.editArticle === true &&
-        <NavItem eventKey={5} onClick = {() => this.props.setPage(pageValues.EDITARTICLE)}>Edit Article</NavItem>
+        <NavItem eventKey={5} onClick = {() => {this.props.resetEditArticle(); this.props.setPage(pageValues.EDIT_ARTICLE);}}>Edit Article</NavItem>
       }
       {
         this.props.viewArticles === true &&
-        <NavItem eventKey={6} onClick = {() => this.props.setPage(pageValues.VIEWARTICLES)}>View Articles</NavItem>
+        <NavItem eventKey={6} onClick = {() => this.props.setPage(pageValues.VIEW_ARTICLES)}>View Articles</NavItem>
       }
       {
         this.props.viewYourArticles === true && (this.props.userState === userStateValues.CONTRIBUTOR || this.props.userState === userStateValues.EDITOR) &&
-        <NavItem eventKey={6} onClick = {() => this.props.setPage(pageValues.VIEWYOURARTICLES)}>View Your Articles</NavItem>
+        <NavItem eventKey={6} onClick = {() => this.props.setPage(pageValues.VIEW_YOUR_ARTICLES)}>View Your Articles</NavItem>
       }
       {
         this.props.viewToBeApproved === true && this.props.userState === userStateValues.EDITOR &&
-        <NavItem eventKey={7} onClick = {() => this.props.setPage(pageValues.VIEWARTICLESTOBEAPPROVED)}>View Articlcs to be Approved</NavItem>
+        <NavItem eventKey={7} onClick = {() => this.props.setPage(pageValues.VIEW_ARTICLES_TO_BE_APPROVED)}>View Articlcs to be Approved</NavItem>
       }
       {
         this.props.viewPublishedEditMode === true && this.props.userState === userStateValues.EDITOR &&
-        <NavItem eventKey={8} onClick = {() => this.props.setPage(pageValues.VIEWPUBLISHEDARTICLESEDITMODE)}>View Published Articles (Edit Mode)</NavItem>
+        <NavItem eventKey={8} onClick = {() => this.props.setPage(pageValues.VIEW_PUBLISHED_ARTICLES_EDIT_MODE)}>View Published Articles (Edit Mode)</NavItem>
       }
       </Nav>
       </Navbar>

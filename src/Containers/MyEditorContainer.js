@@ -8,6 +8,7 @@ import {
   setUpdateEditor,
   moveContentSection,
   switchContentSection,
+  setAutosaveCounter,
 } from '../actions';
 import MyEditor from '../Components/MyEditor';
 
@@ -50,6 +51,10 @@ const mapDispatchToProps = dispatch => {
     switchContentSection: (row1, col1, row2, col2) => {
       dispatch(switchContentSection(row1, col1, row2, col2));
     },
+    setAutosaveCounter: (autosaveCounter) => {
+      dispatch(setAutosaveCounter(autosaveCounter));
+    },
+
   }
 }
 

@@ -3,33 +3,13 @@ import ArticleContainer from '../Containers/ArticleContainer';
 import MenuBarContainer from '../Containers/MenuBarContainer';
 import {Grid, Row, Col, Clearfix} from 'react-bootstrap';
 import { viewArticlesTypes } from '../actions';
+import {
+  VIEW_ALL_ARTICLES_URL,
+  VIEW_ALL_YOUR_ARTICLES_URL,
+  VIEW_ALL_PENDING_ARTICLES_URL,
+  VIEW_ALL_PUBLISHED_ARTICLES_URL,
+} from '../GeneralParameters';
 
-/*
-function textBlobGen() {
-  var textBlob = '';
-    for(var i = 0; i < 500; i++)
-    {
-      if(Math.random() < 0.20)
-          textBlob +=' ';
-        textBlob += String.fromCharCode(97 + (Math.floor(Math.random() * 26)));
-    }
-  return textBlob;
-}
-function ArticleGen() {
-  var data = [];
-  var rowNumber = 1 + Math.floor(Math.random() * 5);
-  for(var i = 0; i < rowNumber; i++)
-  {
-    data[i] = [];
-    var colNumber = 1 + Math.floor(Math.random() * 3);
-    for(var j = 0; j < colNumber; j++)
-    {
-      data[i][j] = textBlobGen();
-    }
-  }
-  return data;
-}
-*/
 class ViewArticles extends Component {
 
   constructor(props)
@@ -37,17 +17,6 @@ class ViewArticles extends Component {
     super(props)
     this.getArticles = this._getArticles.bind(this);
     this.getArticles();
-    //used for testing to create random text articles
-    // for(var i = 0; i < 5; i++)
-    // {
-    //   var article = {};
-    //   article['title'] = 'Article '+i;
-    //   article['content'] = ArticleGen();
-    //   article['id'] = i;
-    //
-    //   this.articles[i] = article;
-    //   //[title:'Article 'i content = {textBlobGen()} focusFunction={() => {this.setArticleFocus(i)} }/>
-    // }
   }
 
   componentWillReceiveProps(nextProps) {
@@ -60,13 +29,15 @@ class ViewArticles extends Component {
 
   _getArticles() {
 
+    this.props.setViewArticlesLoading(true);
     var url = '';
     if(this.props.viewArticlesType === viewArticlesTypes.YOUR_ARTICLES)
-      url = 'http://homestead.app/viewallarticles';
+      url = VIEW_ALL_YOUR_ARTICLES_URL;
     else if(this.props.viewArticlesType === viewArticlesTypes.TO_BE_APPROVED)
-      url = 'http://homestead.app/viewallpendingarticles';
+      url = VIEW_ALL_PENDING_ARTICLES_URL;
     else
-      url = 'http://homestead.app/viewallpublishedarticles';
+      url = VIEW_ALL_PUBLISHED_ARTICLES_URL;
+
 
     fetch(url)
     .then((response) => response.json())
@@ -82,6 +53,7 @@ class ViewArticles extends Component {
           newArticle['title'] = article.name;
           newArticle['teaser'] = article.teaser;
           newArticle['content'] = JSON.parse(article.content);
+          newArticle['author'] = article.author;
           newArticle['published_date'] = article.published_date;
           if(props.viewArticlesType === viewArticlesTypes.YOUR_ARTICLES)
             newArticle['published'] = article.published;
@@ -89,106 +61,25 @@ class ViewArticles extends Component {
             newArticle['published'] = 1; //all articles to be approved have a published value of 1
           else
             newArticle['published'] = 2;
-
-            newArticles.push(newArticle);
-          });
+          newArticle['user_id'] = article.user_id;
+          newArticle['likes'] = article.likes;
+          newArticle['like'] = article.like;
+          newArticles.push(newArticle);
+        });
       }
       this.props.setArticles(newArticles);
+      this.props.setViewArticlesLoading(false);
     })
     .catch((error) => {
        console.error(error);
     });
-    /*
-
-
-      if(this.props.viewArticlesType === viewArticlesTypes.YOUR_ARTICLES)
-      {
-        console.log('View Your Articles');
-        fetch('http://homestead.app/viewallarticles')
-        .then((response) => response.json())
-        .then((responseJson) => {
-
-           var newArticles = [];
-           if(responseJson !== null)
-           {
-             responseJson.forEach(function(article){
-               var newArticle = [];
-               newArticle['id'] = article.id;
-               newArticle['title'] = article.name;
-               newArticle['teaser'] = article.teaser;
-               newArticle['content'] = JSON.parse(article.content);
-               newArticle['published'] = article.published;
-               newArticles.push(newArticle);
-             });
-          }
-          this.props.setArticles(newArticles);
-        })
-        .catch((error) => {
-           console.error(error);
-        });
-      }
-      else if(this.props.viewArticlesType === viewArticlesTypes.TO_BE_APPROVED)
-      {
-        console.log('View To Be Approved');
-      fetch('http://homestead.app/viewallpendingarticles')
-      .then((response) => response.json())
-      .then((responseJson) => {
-
-         var newArticles = [];
-         if(responseJson != null)
-         {
-           responseJson.forEach(function(article){
-             var newArticle = [];
-             newArticle['id'] = article.id;
-             newArticle['title'] = article.name;
-             newArticle['teaser'] = article.teaser;
-             newArticle['content'] = JSON.parse(article.content);
-             newArticle['published'] = 1; //all articles to be approved have a published value of 1
-             newArticles.push(newArticle);
-           });
-          }
-          this.props.setArticles(newArticles);
-      })
-      .catch((error) => {
-         console.error(error);
-      });
-      }
-      // else if(this.state.viewPublishedEditMode === true)
-      // {
-      //   console.log('View Published Edit Mode');
-      // }
-      else
-      {
-          console.log('View Articles');
-        fetch('http://homestead.app/viewallpublishedarticles')
-        .then((response) => response.json())
-        .then((responseJson) => {
-
-           var newArticles = [];
-           if(responseJson !== null)
-           {
-             responseJson.forEach(function(article){
-               var newArticle = [];
-               newArticle['id'] = article.id;
-               newArticle['title'] = article.name;
-               newArticle['teaser'] = article.teaser;
-               newArticle['content'] = JSON.parse(article.content);
-               newArticle['published'] = 2;
-               newArticles.push(newArticle);
-             });
-           }
-           this.props.setArticles(newArticles);
-        })
-        .catch((error) => {
-           console.error(error);
-        });
-      }
-      */
   }
 
   render() {
 
     var content = [];
+    if(this.props.loading === false)
+    {
       for(var i = 0; i < this.props.articles.length; i++)
       {
         content[i] =
@@ -217,26 +108,30 @@ class ViewArticles extends Component {
         }
         </div>
       }
-
-      var heading;
-      switch (this.props.viewArticlesType)
-      {
-        case viewArticlesTypes.PUBLISHED_ARTICLES:
-        heading=<h1>View Articles</h1>;
-          break;
-        case viewArticlesTypes.YOUR_ARTICLES:
-          heading=<h1>View Your Articles</h1>;
-          break;
-        case viewArticlesTypes.TO_BE_APPROVED:
-          heading=<h1>View Articles To Be Approved</h1>;
-          break;
-        case viewArticlesTypes.PUBLISHED_EDIT_MODE:
-          heading=<h1>View Articles (Edit Mode)</h1>;
-          break;
-        default:
-          heading =<h1>error</h1>
-          break;
-      }
+    }
+    else
+    {
+        content = <h3>loading</h3>;
+    }
+    var heading;
+    switch (this.props.viewArticlesType)
+    {
+      case viewArticlesTypes.PUBLISHED_ARTICLES:
+      heading=<h1>View Articles</h1>;
+        break;
+      case viewArticlesTypes.YOUR_ARTICLES:
+        heading=<h1>View Your Articles</h1>;
+        break;
+      case viewArticlesTypes.TO_BE_APPROVED:
+        heading=<h1>View Articles To Be Approved</h1>;
+        break;
+      case viewArticlesTypes.PUBLISHED_EDIT_MODE:
+        heading=<h1>View Articles (Edit Mode)</h1>;
+        break;
+      default:
+        heading =<h1>error</h1>
+        break;
+    }
 
     return (
       <div className='ViewArticles'>

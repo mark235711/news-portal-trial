@@ -6,7 +6,7 @@ import './App.css';
 //import CreateAccount from './CreateAccount';
 //import ViewArticles from './ViewArticles';
 
-import VisiblePage from './Containers/VisiblePage';
+import PageContainer from './Containers/PageContainer';
 //import Test from './Test';
 
 // function fetchJsonGetRequest(url)
@@ -88,7 +88,7 @@ class App extends Component {
     return (
       <div className="App">
         {/*pageToRender*/}
-        <VisiblePage />
+        <PageContainer />
       </div>
     );
   }

@@ -7,9 +7,13 @@ import {
   addContentSection,
   setEditArticlePopup,
   setShowCreateSectionButtons,
+  setSavingInfo,
   setEditArticleID,
   setEditArticlePublished,
   setUpdateEditors,
+  setAutosaveCounter,
+  setShowTitleTooltip,
+  setEditArticleLoading,
 } from '../actions';
 import EditArticle from '../Components/EditArticle';
 
@@ -25,6 +29,10 @@ const mapStateToProps = (state, ownProps) => {
     popupType: state.editArticle.popupType,
     articleID: state.editArticle.articleID,
     showCreateSectionButtons: state.editArticle.showCreateSectionButtons,
+    savingInfoType: state.editArticle.savingInfoType,
+    autosaveCounter: state.editArticle.autosaveCounter,
+    titleTooltip: state.editArticle.titleTooltip,
+    loading: state.editArticle.loading,
   }
 }
 
@@ -33,14 +41,13 @@ const mapDispatchToProps = dispatch => {
   return {
     setPage: type => {
       console.log(type);
-
-        dispatch(setPage(type));
+      dispatch(setPage(type));
     },
-    setTitle: title => {
-        dispatch(setTitle(title));
+    setTitle: (title, useCounter) => {
+        dispatch(setTitle(title, useCounter));
     },
-    setTeaser: teaser => {
-        dispatch(setTeaser(teaser));
+    setTeaser: (teaser, useCounter) => {
+        dispatch(setTeaser(teaser, useCounter));
     },
     setContent: (sectionsContent) => {
       dispatch(setContent(sectionsContent));
@@ -54,17 +61,27 @@ const mapDispatchToProps = dispatch => {
     setShowCreateSectionButtons: value => {
       dispatch(setShowCreateSectionButtons(value));
     },
+    setSavingInfo: value => {
+      dispatch(setSavingInfo(value));
+    },
     setArticleID: id => {
       dispatch(setEditArticleID(id));
     },
     setEditArticlePublished: published => {
       dispatch(setEditArticlePublished(published));
     },
-
     setUpdateEditors: value => {
       dispatch(setUpdateEditors(value));
     },
-
+    setAutosaveCounter: autosaveCounter => {
+      dispatch(setAutosaveCounter(autosaveCounter));
+    },
+    setShowTitleTooltip: value => {
+      dispatch(setShowTitleTooltip(value));
+    },
+    setEditArticleLoading: value => {
+      dispatch(setEditArticleLoading(value));
+    },
   }
 }
 

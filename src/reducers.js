@@ -1,23 +1,3 @@
-
-
-
-
-/*
-list of reducers needed
-app: needed for managing what page is shown
-
-article:used to store it's title ,teaser, content published status , several popup and button states
-viewArticles: 3 boolean values to show what types of articles to show and what actions to allow and an array of articles
-
-
-
-
-//following 2 may not be needed
-login: used for managing the username and password fields
-createAccount: similar to login but with username email password and confurm password
-
-*/
-
 import { combineReducers } from 'redux';
 import {
   SET_PAGE,
@@ -26,7 +6,14 @@ import {
   SET_USER_STATE,
   userStateValues,
   SET_ARTICLES,
+  SET_VIEW_ARTICLES_LOADING,
   SET_ARTICLE_POPUP,
+  SET_LIKE_ARTICLE,
+  SET_COMMENT_VISIBILITY,
+  SET_COMMENT_CONTENT,
+  SET_COMMENT_LINK_POPUP,
+  SET_LOAD_COMMENT,
+  SET_LIKE_COMMENT,
   RESET_EDIT_ARTICLE,
   SET_TITLE,
   SET_TEASER,
@@ -39,6 +26,8 @@ import {
   SET_EDIT_ARTICLE_ID,
   SET_EDIT_ARTICLE_PUBLISHED,
   SET_SHOW_CREATE_SECTION_BUTTONS,
+  savingInfoTypes,
+  SET_SAVING_INFO,
   MOVE_CONTENT_SECTION,
   SWITCH_CONTENT_SECTION,
   moveContentSectionValues,
@@ -48,13 +37,16 @@ import {
   SET_EDITOR_FOCUS,
   SET_UPDATE_EDITOR,
   SET_UPDATE_EDITORS,
+  SET_AUTOSAVE_COUNTER,
+  SET_SHOW_TITLE_TOOLTIP,
+  SET_EDIT_ARTICLE_LOADING,
  } from './actions';
 
 
 const pageInitalState = {
   currentPage: pageValues.LOGIN,
-  otherData: '',
-  userState: userStateValues.EDITOR,
+  otherData: '', //may not be needed, look into
+  userState: userStateValues.EDITOR, //used to store weather the user is an contributor editor or viewer
 }
 function page(state = pageInitalState, action) {
 
@@ -80,40 +72,101 @@ function page(state = pageInitalState, action) {
 const viewArticlesInitalState = {
   articles: [],
   popup: {'visible':false, 'articleID': 1},
+  loading: true,
 }
-function viewArticles(state = viewArticlesInitalState, action)
-{
+function viewArticles(state = viewArticlesInitalState, action) {
   switch(action.type)
   {
     case SET_ARTICLES:
       return Object.assign({}, state, {
         articles: action.articles
       });
+    case SET_VIEW_ARTICLES_LOADING:
+      return Object.assign({}, state, {
+        loading: action.loading
+      });
     case SET_ARTICLE_POPUP:
       return Object.assign({}, state, {
         popup: {'visible':action.visible, 'articleID': action.articleID}
       });
+    case SET_LIKE_ARTICLE:
+
+      let newArticles = [];
+      newArticles = JSON.parse(JSON.stringify(state.articles));
+      // for(let i = 0; i < state.articles.length; i++)
+      // {
+      //   newArticles[i] = state.articles[i];
+      // }
+      newArticles[0]['title'] = 'asdf';
+      console.log(newArticles);
+      console.log(state.articles);
+      return state;
+      //return Object.assign({}, state, {
+        //popup: {'visible':action.visible, 'articleID': action.articleID}
+      //});
     default:
         return state;
   }
 }
 
+const commentIntialState = {
+  visible: false,
+  content: '<p><br /><p>',
+  linkPopup: false,
+  loadComment: false,
+  userLike: false,
+  likeCount: 0,
+}
+function commentEditor(state = commentIntialState, action)
+{
+  switch(action.type)
+  {
+    case SET_COMMENT_VISIBILITY:
+    return Object.assign({}, state, {
+      visible: action.visible
+    });
+    case SET_COMMENT_CONTENT:
+    return Object.assign({}, state, {
+      content: action.content
+    });
+    case SET_COMMENT_LINK_POPUP:
+    return Object.assign({}, state, {
+      linkPopup: action.linkPopup
+    });
+    case SET_LOAD_COMMENT:
+    return Object.assign({}, state, {
+      loadComment: action.value
+    });
+    case SET_LIKE_COMMENT:
+    let newLikeCount = state.likeCount + 1;
+    return Object.assign({}, state, {
+      userLike: action.value,
+      likeCount: newLikeCount,
+    });
+    default:
+      return state;
+  }
+}
 
 
 
 const editArticleInitalState = {
   title: '',
   teaser: '',
-  editorSectionsContent: [['<p><br></p>', '<p><br></p>'], ['<p><br></p>', '<p><br></p>'], ['<p><br></p>', '<p><br></p>']],
+  editorSectionsContent: [],
   updateEditorSectionsContent: [[false, false], [false, false], [false, false]],
   articleID: null,
   published: 0, //0 means not published
   createMode: false,
   popupType: editArticlePopups.NONE,
   showCreateSectionButtons: false,
+  savingInfoType: savingInfoTypes.NONE,
   editorExtraControlType: editorExtraControlTypes.NONE,
   editorExtraControlURL: '',
   editorFocusID: -1,
+  autosaveCounter: 0, //counts number of alterations since last save to database
+  titleTooltip: false,
+  loading: false,
 }
 
 function setUpdateEditorSectionsContentTrue(row)
@@ -146,14 +199,24 @@ function editArticle(state = editArticleInitalState, action)
     }
     case SET_TITLE:
     {
-        return Object.assign({}, state, {
-        title: action.title
+      let newAutosaveCounter = state.autosaveCounter;
+      if(action.useCounter)
+        newAutosaveCounter++;
+
+      return Object.assign({}, state, {
+        title: action.title,
+        autosaveCounter: newAutosaveCounter,
       });
     }
     case SET_TEASER:
     {
-        return Object.assign({}, state, {
-        teaser: action.teaser
+      let newAutosaveCounter = state.autosaveCounter;
+      if(action.useCounter)
+        newAutosaveCounter++;
+
+      return Object.assign({}, state, {
+        teaser: action.teaser,
+        autosaveCounter: newAutosaveCounter,
       });
     }
     case SET_CONTENT:
@@ -175,6 +238,7 @@ function editArticle(state = editArticleInitalState, action)
     }
     case SET_CONTENT_SECTION:
     {
+      let newAutosaveCounter = state.autosaveCounter + 1;
       //makes a deep copy of editorSectionsContent
       var newEditorSectionsContent = [];
       for(let i = 0; i < state.editorSectionsContent.length; i++)
@@ -184,11 +248,13 @@ function editArticle(state = editArticleInitalState, action)
       newEditorSectionsContent[action.row][action.col] = action.contentSection;
 
       return Object.assign({}, state, {
-       editorSectionsContent: newEditorSectionsContent
+       editorSectionsContent: newEditorSectionsContent,
+       autosaveCounter: newAutosaveCounter,
       });
     }
     case ADD_CONTENT_SECTION:
     {
+      let newAutosaveCounter = state.autosaveCounter + 1;
       //makes a deep copy of editorSections
 
       //makes a deep copy of editorSectionsContent and updateEditorSectionsContent
@@ -219,11 +285,13 @@ function editArticle(state = editArticleInitalState, action)
       }
       return Object.assign({}, state, {
         editorSectionsContent: newEditorSectionsContent,
-        updateEditorSectionsContent: newUpdateEditorSectionsContent
+        updateEditorSectionsContent: newUpdateEditorSectionsContent,
+        autosaveCounter: newAutosaveCounter,
       });
     }
     case REMOVE_CONTENT_SECTION:
     {
+      let newAutosaveCounter = state.autosaveCounter + 1;
       let newEditorSectionsContent = [];
       let newUpdateEditorSectionsContent = [];
       let outputPos = 0; //similar to i but doesn't increment when row is skipped
@@ -244,7 +312,9 @@ function editArticle(state = editArticleInitalState, action)
 
       return Object.assign({}, state, {
         editorSectionsContent: newEditorSectionsContent,
-        updateEditorSectionsContent: newUpdateEditorSectionsContent
+        updateEditorSectionsContent: newUpdateEditorSectionsContent,
+        autosaveCounter: newAutosaveCounter,
+
       });
     }
     case SET_EDIT_ARTICLE_POPUP:
@@ -271,8 +341,15 @@ function editArticle(state = editArticleInitalState, action)
         showCreateSectionButtons: action.value
       });
     }
+    case SET_SAVING_INFO:
+    {
+      return Object.assign({}, state, {
+        savingInfoType: action.value
+      });
+    }
     case MOVE_CONTENT_SECTION:
     {
+      let newAutosaveCounter = state.autosaveCounter + 1;
       let newEditorSectionsContent = [];
       let newUpdateEditorSectionsContent = [];
 
@@ -319,11 +396,13 @@ function editArticle(state = editArticleInitalState, action)
         }
         return Object.assign({}, state, {
           editorSectionsContent: newEditorSectionsContent,
-          updateEditorSectionsContent: newUpdateEditorSectionsContent
+          updateEditorSectionsContent: newUpdateEditorSectionsContent,
+          autosaveCounter: newAutosaveCounter,
         });
     }
     case SWITCH_CONTENT_SECTION:
     {
+      let newAutosaveCounter = state.autosaveCounter + 1;
       let newEditorSectionsContent = [];
       let newUpdateEditorSectionsContent = [];
 
@@ -340,7 +419,8 @@ function editArticle(state = editArticleInitalState, action)
 
       return Object.assign({}, state, {
         editorSectionsContent: newEditorSectionsContent,
-        updateEditorSectionsContent: newUpdateEditorSectionsContent
+        updateEditorSectionsContent: newUpdateEditorSectionsContent,
+        autosaveCounter: newAutosaveCounter,
       });
     }
     case SET_EDITOR_EXTRA_CONTROLS:
@@ -361,41 +441,6 @@ function editArticle(state = editArticleInitalState, action)
         editorFocusID: action.id
       });
     }
-    // case SET_EDITOR_STATE:
-    //   console.log('set editor state');
-    //   console.log("!!ERROR THIS SHOULDN'T BE CALLED!!");
-    //   //makes a deep copy of editorStates
-    //   var newEditorStates = [];
-    //   for(var i = 0; i < state.editorStates.length; i++)
-    //   {
-    //     newEditorStates[i] = [...state.editorStates[i].slice()];
-    //   }
-    //   //newEditorStates[action.row][action.col] = convertToRaw(action.editorState.getCurrentContent());
-    //
-    //   console.log(stateToHTML(action.editorState.getCurrentContent()));
-    //
-    //   return Object.assign({}, state, {
-    //     editorStates: newEditorStates
-    //   });
-    // case SET_EDITOR_STATES:
-    // console.log("!!ERROR THIS SHOULDN'T BE CALLED!!");
-    //
-    // var editorStates = [];
-    // for(var i = 0; i < action.editorStates.length; i++)
-    // {
-    //   editorStates[i] = [];
-    //   for(var j = 0; j < action.editorStates[i].length; j++)
-    //   {
-    //     //editorStates[i][j] = convertToRaw(action.editorStates[i][j].getCurrentContent());
-    //   }
-    // }
-    // console.log('did this work?');
-    // //console.log(stateToHTML(action.editorStates[0][0].getCurrentContent()));
-    //
-    //   return Object.assign({}, state, {
-    //     editorStates: editorStates
-    //   });
-
     case SET_UPDATE_EDITOR:
     {
       //creates an array that stores the new values that determines if each editor us updated
@@ -425,6 +470,20 @@ function editArticle(state = editArticleInitalState, action)
         updateEditorSectionsContent: updateEditorContent
       });
     }
+    case SET_AUTOSAVE_COUNTER:
+    {
+      return Object.assign({}, state, {
+        autosaveCounter: action.autosaveCounter
+      });
+    }
+    case SET_SHOW_TITLE_TOOLTIP:
+    return Object.assign({}, state, {
+      titleTooltip: action.value,
+    });
+    case SET_EDIT_ARTICLE_LOADING:
+    return Object.assign({}, state, {
+      loading: action.loading,
+    });
     default:
       return state;
   }
@@ -435,6 +494,7 @@ function editArticle(state = editArticleInitalState, action)
 const app = combineReducers({
   page,
   viewArticles,
+  commentEditor,
   editArticle
 })
 
