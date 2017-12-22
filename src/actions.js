@@ -111,6 +111,7 @@ export const commentsFilterValues = {
   NEWEST: 'NEWEST',
   OLDEST: 'OLDEST',
 }
+Object.freeze(commentsFilterValues);
 export const SET_COMMENT_HOVER = 'SET_COMMENT_HOVER';
 
 export function setComments(comments) {
@@ -162,6 +163,7 @@ export const savingInfoTypes = {
   NONE: 'NONE',
   ERROR: 'ERROR',
 }
+
 export const MOVE_CONTENT_SECTION = 'MOVE_CONTENT_SECTION';
 export const moveContentSectionValues = {
   UP: 'UP',

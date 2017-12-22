@@ -1,12 +1,14 @@
 import React from 'react';
 import {Editor, EditorState, RichUtils, CompositeDecorator, AtomicBlockUtils} from 'draft-js';
 import '../MyEditor.css';
-import {Glyphicon, Button, OverlayTrigger, Tooltip, Panel, ButtonGroup} from 'react-bootstrap'
+import ReactDOM from 'react-dom';
+import {Glyphicon, Button, OverlayTrigger, Tooltip, Panel, ButtonGroupOverlay,ButtonGroup, Overlay} from 'react-bootstrap'
 import {stateToHTML} from 'draft-js-export-html';
 import {stateFromHTML} from 'draft-js-import-html';
 import {findLinkEntities, Link } from './MyEditor';
-import {POST_COMMENT_URL} from '../GeneralParameters';
+import {POST_COMMENT_URL, COMMENT_MAX_CHAR_LIMIT} from '../GeneralParameters';
 
+import {observer} from 'mobx-react';
 
 function getCompositeDecorator()
 {
@@ -18,6 +20,7 @@ function getCompositeDecorator()
     ]);
 }
 
+@observer
 class CommentEditor extends React.Component {
 
   constructor(props) {
@@ -27,69 +30,43 @@ class CommentEditor extends React.Component {
     if(props.loadComment === false)
     {
       this.state = {
-        editorState: EditorState.createWithContent(stateFromHTML(props.content), decorator),
+        editorState: EditorState.createWithContent(stateFromHTML(props.store.commentEditor.content), decorator),
       }
     }
     else
     {
       this.state = {
-        editorState: EditorState.createWithContent(stateFromHTML(props.content),decorator),
+        editorState: EditorState.createWithContent(stateFromHTML(props.store.commentEditor.content),decorator),
       }
     }
     this.onChange = (editorState) =>
     {
       var editor = this;
       this.setState({editorState}, function() { //updates the component state (different the the redux state)
-        this.props.setCommentContent(stateToHTML(editor.state.editorState.getCurrentContent()));
+        this.props.store.commentEditor.content = stateToHTML(editor.state.editorState.getCurrentContent());
       });
     }
 
     //defines functions
-    this.postComment = this._postComment.bind(this);
     this.onBoldClick = this._onBoldClick.bind(this);
     this.onItalicClick = this._onItalicClick.bind(this);
     this.onUnderlineClick = this._onUnderlineClick.bind(this);
     this.showLinkPopup = this._showLinkPopup.bind(this);
     this.createLink = this._createLink.bind(this);
     this.removeLink = this._removeLink.bind(this);
-
+    this.tooltipTimeout = this._tooltipTimeout.bind(this);
+    this.checkPostComment = this._checkPostComment.bind(this);
   }
 
-  componentWillReceiveProps(nextProps) {
-    //console.log(props.loadComment);
-    if(nextProps.loadComment === true) //if set to true the component needs to update it's editorstate
+  componentWillUpdate() {
+    if(this.props.store.commentEditor.loadComment === true) //if set to true the component needs to update it's editorstate
     {
       var decorator = getCompositeDecorator();
-      this.setState({editorState: EditorState.createWithContent(stateFromHTML(nextProps.content),decorator)});
-      this.props.setLoadComment(false);
+      this.setState({editorState: EditorState.createWithContent(stateFromHTML(this.props.store.commentEditor.content),decorator)});
+      this.props.store.commentEditor.loadComment = false;
     }
   }
 
-
-
-  _postComment(id) {
-    fetch(POST_COMMENT_URL, {
-      method:'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        comment_id: id,
-        article_id: this.props.articleID,
-        content: this.props.content,
-      })
-    })
-    .then((response) => response.json())
-    .then((responseJson) => {
-      console.log(responseJson);
-      this.props.setLoadComments(true);
-      this.props.setCommentContent('<p><br /></p>');
-    })
-    .catch((error) => {
-      console.error(error);
-    });
-  }
 
   _onBoldClick(e) {
     e.preventDefault();
@@ -110,10 +87,10 @@ class CommentEditor extends React.Component {
 
   _showLinkPopup(e) {
     e.preventDefault();
-    if(this.props.linkPopup === true)
-      this.props.setCommentLinkPopup(false);
+    if(this.props.store.commentEditor.linkPopup === true)
+      this.props.store.commentEditor.linkPopup = false;
     else
-    this.props.setCommentLinkPopup(true);
+    this.props.store.commentEditor.linkPopup = true;
   }
   _createLink(e) {
     var url = document.getElementById('linkInput').value;
@@ -144,6 +121,53 @@ class CommentEditor extends React.Component {
     }
   }
 
+  _tooltipTimeout() {
+    var editor = this;
+    setTimeout( function() {
+      editor.props.store.commentEditor.commentWarning = 'NONE';
+    }, 2000);
+  }
+  _checkPostComment(){
+    //checks to see if there is anything beside white space in the comment
+    var charNumb = 0;
+    var elementStarted = false; //set to true when '<' is found and false when '>' is found
+    var content = this.props.store.commentEditor.content;
+    for (var i = 0; i < content.length; i++) {
+      if(content[i] == '<')
+        elementStarted = true;
+      else if(content[i] == '>')
+        elementStarted = false;
+      else if(elementStarted === false) //other characters may be needed
+      {
+        if(content[i] === '&' && content[i+1] === 'n' && content[i+2] === 'b' && content[i+3] === 's' && content[i+4] === 'p' && content[i+5] === ';')
+        { // ' ' char, special character '&nbps;'
+          i+=5;
+          continue;
+        }
+        if(content[i].charCodeAt(0) === 10)//new line
+        {
+          continue;
+        }
+        if(content[i] === '&' && content[i+1] === 'a' && content[i+2] === 'm' && content[i+3] === 'p' && content[i+4] === ';')
+        { // '&' char //uses '$amp;' for & as it's already used as part of special characters
+          i+=4;
+          charNumb++;
+          continue;
+        }
+        charNumb++;
+      }
+    }
+    console.log(charNumb);
+    if(charNumb === 0)
+      this.props.store.commentEditor.commentWarning = 'EMPTY';
+    else if(charNumb > COMMENT_MAX_CHAR_LIMIT)
+      this.props.store.commentEditor.commentWarning = 'MAX_CHAR';
+    else
+    {
+      this.props.store.commentEditor.visible = false;
+      this.props.store.commentEditor.postComment();
+    }
+  }
   render() {
     var header =
     <div className='MyEditor' style={{visibility: this.props.id === this.props.editorFocusID ? 'visible' : 'hidden' }}>
@@ -160,7 +184,7 @@ class CommentEditor extends React.Component {
         <Button onMouseDown={this.showLinkPopup}><Glyphicon glyph="link"/></Button>
       </OverlayTrigger>
       {
-        this.props.linkPopup === true &&
+        this.props.store.commentEditor.linkPopup === true &&
         <div>
           <Button onMouseDown={this.createLink}>Create Link</Button>
           <Button onMouseDown={this.removeLink}>Remove Link</Button>
@@ -169,9 +193,24 @@ class CommentEditor extends React.Component {
       }
     </div>;
 
+
     return (
       <div>
         <Panel header={header} onBlur={this.handleOnBlur} onFocus={this.handleOnFocus} onClick={this.handleOnFocus}>
+          <Overlay target={() => ReactDOM.findDOMNode(this.refs.editor)} show={this.props.store.commentEditor.commentWarning !== 'NONE'}  placement="top" onEntered={this.tooltipTimeout}>
+              {
+                this.props.store.commentEditor.commentWarning === 'MAX_CHAR' &&
+                <Tooltip className='WarningTooltip' id={1}>
+                  a comment cannot have more than {COMMENT_MAX_CHAR_LIMIT} characters
+                </Tooltip>
+              }
+              {
+                this.props.store.commentEditor.commentWarning === 'EMPTY' &&
+                <Tooltip className='WarningTooltip' id={1}>
+                  a comment cannot be empty
+                </Tooltip>
+              }
+          </Overlay>
           <div className='contentArea' style={{textAlign: 'left'}}>
             <Editor className='Editor' ref='editor'
               editorState={this.state.editorState}
@@ -185,14 +224,14 @@ class CommentEditor extends React.Component {
         </Panel>
         <ButtonGroup>
         {
-          this.props.commentID !== null &&
-          <Button onMouseDown={()=> {this.props.setCommentVisibility(false); this.postComment(this.props.commentID);}}>Save Comment</Button>
+          this.props.store.commentEditor.commentID !== null &&
+          <Button onMouseDown={()=> {this.props.store.commentEditor.visible = false; this.props.store.commentEditor.postComment();}}>Save Comment</Button>
         }
         {
-          this.props.commentID === null &&
-          <Button onMouseDown={()=> {this.props.setCommentVisibility(false); this.postComment(null);}}>Post Comment</Button>
+          this.props.store.commentEditor.commentID === null &&
+          <Button onMouseDown={this.checkPostComment}>Post Comment</Button>
         }
-        <Button onMouseDown={()=> {this.props.setCommentVisibility(false); this.props.resetCommentEditor();}}>Cancel Comment</Button>
+        <Button onMouseDown={()=> {this.props.store.commentEditor.visible = false; this.props.store.commentEditor.resetCommentEditor();}}>Cancel Comment</Button>
         </ButtonGroup>
       </div>
     );

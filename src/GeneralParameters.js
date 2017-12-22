@@ -16,7 +16,7 @@ export const MAX_CHAR_NOT_UPDATED = 15;
 //used in MyEditor and EDitArticle, the maximum amount of time before an autosave can occur
 export const MAX_WAIT_AUTOSAVE = 10000; //in miliseconds, 1000 = 1 sec
 
-
+export const COMMENT_MAX_CHAR_LIMIT = 1000; //the maximum number of characters that can be used in a comment
 
 //urls used for different functionality
 

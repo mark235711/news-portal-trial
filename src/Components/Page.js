@@ -1,11 +1,15 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
 import Login from '../Login';
-import EditArticleContainer from '../Containers/EditArticleContainer';
+import EditArticle from '../Components/EditArticle';
 import CreateAccount from '../CreateAccount';
-import ViewArticlesContainer from '../Containers/ViewArticlesContainer';
+import ViewArticles from '../Components/ViewArticles';
 import { pageValues, userStateValues } from '../actions';
 import { GET_USER_DATA_URL } from '../GeneralParameters';
+
+import {observer, inject} from 'mobx-react';
+
+@observer
 class Page extends Component {
 
   constructor(props)
@@ -26,12 +30,12 @@ class Page extends Component {
     })
     .then((response) => response.json())
     .then((responseJson) => {
-      this.props.setUserID(responseJson['user_id']);
-      this.props.setUsername(responseJson['name']);
+      this.props.store.user.id = responseJson['user_id'];
+      this.props.store.user.username = responseJson['name'];
       if(responseJson['permissions'][0] === 'editor')
-        this.props.setUserState(userStateValues.EDITOR);
+        this.props.store.user.permissions = 'EDITOR';
       else if(responseJson['permissions'][0] === 'contributor')
-        this.props.setUserState(userStateValues.CONTRIBUTOR);
+        this.props.store.user.permissions = 'CONTRIBUTOR';
     })
     .catch((error) => {
       console.error(error);
@@ -42,31 +46,32 @@ class Page extends Component {
 
   render()
   {
+      console.log(this.props.store.currentPage);
       var pageToRender;
-      switch (this.props.currentPage) {
-        case pageValues.LOGIN:
-          pageToRender = <Login />
+      switch (this.props.store.currentPage) {
+        case pageValues.LOGIN: //not currently used
+          pageToRender = <Login store={this.props.store}/>
           break;
-        case pageValues.CREATE_ACCOUNT:
-          pageToRender = <CreateAccount />
+        case pageValues.CREATE_ACCOUNT: //not currently used
+          pageToRender = <CreateAccount store={this.props.store}/>
           break;
         case pageValues.EDIT_ARTICLE:
-          pageToRender = <EditArticleContainer />
+          pageToRender = <EditArticle store={this.props.store}/>
           break;
         case pageValues.CREATE_ARTICLE:
-          pageToRender = <EditArticleContainer createMode={true}/>
+          pageToRender = <EditArticle store={this.props.store} createMode={true}/>
           break;
         case pageValues.VIEW_ARTICLES:
-          pageToRender = <ViewArticlesContainer />
+          pageToRender = <ViewArticles store={this.props.store}/>
           break;
         case pageValues.VIEW_YOUR_ARTICLES :
-          pageToRender = <ViewArticlesContainer />
+          pageToRender = <ViewArticles store={this.props.store}/>
           break;
         case pageValues.VIEW_ARTICLES_TO_BE_APPROVED : //this page should only be accessed by editors
-          pageToRender = <ViewArticlesContainer />
+          pageToRender = <ViewArticles store={this.props.store}/>
           break;
         case pageValues.VIEW_PUBLISHED_ARTICLES_EDIT_MODE: //this page should only be accessed by editors
-          pageToRender = <ViewArticlesContainer />
+          pageToRender = <ViewArticles store={this.props.store}/>
           break;
         default:
           pageToRender = <h1>error page {this.props.currentPage} not found</h1>
@@ -80,13 +85,9 @@ class Page extends Component {
   }
 
 }
-
-Page.propTypes = {
-  currentPage: PropTypes.string.isRequired,
-  otherData: PropTypes.string.isRequired,
-}
-
-
-
+// Page.propTypes = {
+  // currentPage: PropTypes.string.isRequired,
+  // otherData: PropTypes.string.isRequired,
+// }
 
 export default Page;

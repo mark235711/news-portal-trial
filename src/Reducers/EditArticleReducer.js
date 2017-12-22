@@ -35,7 +35,7 @@ const editArticleInitalState = {
   articleID: null,
   published: 0, //0 means not published
   createMode: false,
-  popupType: editArticlePopups.NONE,
+  popupType: 'NONE',
   showCreateSectionButtons: false,
   savingInfoType: savingInfoTypes.NONE,
   editorExtraControlType: editorExtraControlTypes.NONE,

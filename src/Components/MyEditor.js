@@ -12,6 +12,9 @@ import {MAX_CHAR_NOT_UPDATED, MAX_WAIT_AUTOSAVE} from '../GeneralParameters';
 //import Editor from 'draft-js-plugins-editor';
 //import createImagePlugin from 'draft-js-image-plugin';
 
+import {observer} from 'mobx-react';
+
+
 export function getCompositeDecorator()
 {
   return new CompositeDecorator([ //used to create links
@@ -26,19 +29,21 @@ export function getCompositeDecorator()
         ]);
 }
 
+
+
+@observer
 class MyEditor extends React.Component {
   constructor(props) {
     super(props);
 
     var decorator = getCompositeDecorator();
      this.state = {
-       editorState: EditorState.createWithContent(stateFromHTML(props.editorSectionContent), decorator),
+       editorState: EditorState.createWithContent(stateFromHTML(props.store.editArticle.editorSectionsContent[this.props.row][this.props.col]), decorator),
        lastChar: null, //the last char, used as normal saving is done on ' ' so that saving doesn't save half a word, also used to store backspace as 'backspace'
        charNumberNotUpdated: 0, //used to count the number of normal chars not saved to the redux state
        forceUpdate: false,
     };
     this.autosaveTimeout = null;
-
     this.onChange = (editorState) =>
     {
       this.setState({editorState}, function() { //updates the component state (different the the redux state)
@@ -56,10 +61,10 @@ class MyEditor extends React.Component {
 
           //sends the update to the redux state
           var html = stateToHTML(this.state.editorState.getCurrentContent());
-          this.props.setContentSection(this.props.row, this.props.col, html);
+          this.props.store.editArticle.setEditorSectionContent(this.props.row, this.props.col, html);
           console.log('on change update');
         }
-        else if(stateToHTML(this.state.editorState.getCurrentContent()) !== this.props.editorSectionContent && this.state.lastChar !== '')
+        else if(stateToHTML(this.state.editorState.getCurrentContent()) !== this.props.store.editArticle.editorSectionsContent[this.props.row][this.props.col] && this.state.lastChar !== '')
         {
           if(this.autosaveTimeout !== null)
           {
@@ -72,8 +77,8 @@ class MyEditor extends React.Component {
             function(){
               //sends the update to the redux state
               var html = stateToHTML(editor.state.editorState.getCurrentContent());
-              editor.props.setContentSection(editor.props.row, editor.props.col, html);
-              editor.props.setAutosaveCounter(-1);
+              editor.props.store.editArticle.setEditorSectionContent(editor.props.row, editor.props.col, html);
+              editor.props.store.editArticle.autosaveCounter = -1;
               console.log('autosave update');
               editor.autosaveTimeout = null;
           }, MAX_WAIT_AUTOSAVE);
@@ -100,12 +105,14 @@ class MyEditor extends React.Component {
     this.createLink = this._createLink.bind(this);
     this.removeLink = this._removeLink.bind(this);
     this.onMoveClick = this._onMoveClick.bind(this);
+    this.switchContentSection = this._switchContentSection.bind(this);
     this.showImagePopup = this._showImagePopop.bind(this);
     this.onCreateImage = this._onCreateImage.bind(this);
     this.onDropImage = this._onDropImage.bind(this);
     this.onDropContent = this._onDropContent.bind(this);
     this.onDragContent = this._onDragContent.bind(this);
     this.handleImageUpload = this._handleImageUpload.bind(this);
+
     //not currently working
     this.onTab = this._onTab.bind(this);
     this.onUpArrow=this._onUpArrow.bind(this);
@@ -115,12 +122,15 @@ class MyEditor extends React.Component {
 
   }
   componentWillReceiveProps(nextProps) {
-
-    if(nextProps.updateEditorSectionContent === true) //if set to true the component needs to update it's editorstate
+      //console.log(nextProps);
+    if(this.props.store.editArticle.updateEditorSectionsContent[this.props.row][this.props.col] === true) //if set to true the component needs to update it's editorstate
     {
+        //console.log(nextProps.store.editArticle.updateEditorSectionsContent[this.props.row][this.props.col]);
         var decorator = getCompositeDecorator();
-        this.setState({editorState: EditorState.createWithContent(stateFromHTML(nextProps.editorSectionContent),decorator)});
-        this.props.setUpdateEditor(this.props.row, this.props.col, false);
+        this.setState({editorState: EditorState.createWithContent(stateFromHTML(nextProps.store.editArticle.editorSectionsContent[this.props.row][this.props.col]),decorator)});
+        this.props.store.editArticle.updateEditorSectionsContent[this.props.row][this.props.col] = false;
+        console.log('loaded section content');
+        //console.log(this.nextProps.store.editArticle.updateEditorSectionsContent[this.props.row][this.props.col]);
     }
   }
 
@@ -228,10 +238,10 @@ class MyEditor extends React.Component {
   _handleOnFocus(e) {
     if(e.target.nodeName === 'DIV') //prevents this from calling when buttion is pressed
     {
-      if(this.props.editorFocusID !== this.props.id)
+      if(this.props.store.editArticle.editorFocusID !== this.props.id)
       {
-        this.props.setEditorFocus(this.props.id);
-        this.props.setEditorExtraControls(editorExtraControlTypes.NONE);
+        this.props.store.editArticle.editorFocusID = this.props.id;
+        this.props.store.editArticle.editorExtraControlType = 'NONE';
       }
       this.setState({editorState: EditorState.moveFocusToEnd(this.state.editorState)});
       //console.log('editor Focus');
@@ -274,10 +284,10 @@ class MyEditor extends React.Component {
 
   _showLinkPopup(e) {
     e.preventDefault();
-    if(this.props.editorExtraControlType === editorExtraControlTypes.LINK)
-      this.props.setEditorExtraControls(editorExtraControlTypes.NONE);
+    if(this.props.store.editArticle.editorExtraControlType === 'LINK')
+      this.props.store.editArticle.editorExtraControlType = 'NONE';
     else
-    this.props.setEditorExtraControls(editorExtraControlTypes.LINK);
+      this.props.store.editArticle.editorExtraControlType = 'LINK';
   }
   _createLink(e) {
     var url = document.getElementById('linkInput').value;
@@ -315,33 +325,70 @@ class MyEditor extends React.Component {
     //this.props.handleMove(this.state.row, this.state.col, value);
     if(moveValue === 'DEL') //delete
     {
-      this.props.removeContentSection(this.props.row, this.props.col);
-      this.props.setEditorExtraControls(editorExtraControlTypes.NONE);
+      this.props.store.editArticle.removeContentRow(this.props.row);
+      this.props.store.editArticle.editorExtraControlType = 'NONE';
     }
     else
     {
       this.onChange(this.state.editorState);
       this.setState({forceUpdate: true}, function()
       {
-        this.props.moveContentSection(this.props.row, this.props.col, moveValue);
-        if(moveValue === moveContentSectionValues.LEFT)
-          this.props.setEditorFocus(this.props.id - 1);
-        else if(moveValue === moveContentSectionValues.RIGHT)
-          this.props.setEditorFocus(this.props.id + 1);
-        else if(moveValue === moveContentSectionValues.DOWN)
-          this.props.setEditorFocus(this.props.id + this.props.editorSectionsContent[this.props.row + 1].length);
-        else if(moveValue === moveContentSectionValues.UP)
-          this.props.setEditorFocus(this.props.id - this.props.editorSectionsContent[this.props.row - 1].length);
+        var content = this.props.store.editArticle.editorSectionsContent;
+        var update = this.props.store.editArticle.updateEditorSectionsContent;
+        var editArticle = this.props.store.editArticle;
+        var temp;
+        var moveNumber = 0;
+        if(moveValue === 'LEFT' || moveValue === 'UP')
+          moveNumber = -1;
+        else if(moveValue === 'RIGHT' || moveValue === 'DOWN')
+          moveNumber = 1;
+
+        //the following if statement changes the currently selected editor id to where the current editor will be after movement
+        if(moveValue === 'LEFT')
+          this.props.store.editArticle.editorFocusID = this.props.id - 1;
+        else if(moveValue === 'RIGHT')
+          this.props.store.editArticle.editorFocusID = this.props.id + 1;
+        else if(moveValue === 'DOWN')
+          this.props.store.editArticle.editorFocusID = this.props.id + this.props.store.editArticle.editorSectionsContent[this.props.row + 1].length;
+        else if(moveValue === 'UP')
+          this.props.store.editArticle.editorFocusID = this.props.id - this.props.store.editArticle.editorSectionsContent[this.props.row - 1].length;
+
+
+        //the following if statement moves the editor sections to there new positions
+        switch (moveValue) {
+          case 'LEFT':
+          case 'RIGHT':
+          temp = content[this.props.row][this.props.col];
+          editArticle.setEditorSectionContent(this.props.row, this.props.col, content[this.props.row][this.props.col + moveNumber], true);
+          editArticle.setEditorSectionContent(this.props.row, this.props.col + moveNumber, temp, true);
+            break;
+          case 'UP':
+          case 'DOWN':
+          temp = content[this.props.row];
+          editArticle.setEditorSectionContentRow(this.props.row, content[this.props.row + moveNumber], true);
+          editArticle.setEditorSectionContentRow(this.props.row + moveNumber, temp, true);
+            break;
+          default:
+            break;
+        }
+
+
       });
     }
+  }
+  _switchContentSection(row1, col1, row2, col2) {
+    var temp1 = this.props.store.editArticle.editorSectionsContent[row1][col1];
+    var temp2 = this.props.store.editArticle.editorSectionsContent[row2][col2];
+    this.props.store.editArticle.setEditorSectionContent(row1, col1, temp2, true);
+    this.props.store.editArticle.setEditorSectionContent(row2, col2, temp1, true);
   }
 
   _showImagePopop(e) {
     e.preventDefault();
-    if(this.props.editorExtraControlType === editorExtraControlTypes.IMAGE)
-      this.props.setEditorExtraControls(editorExtraControlTypes.NONE);
+    if(this.props.store.editArticle.editorExtraControlType === 'IMAGE')
+      this.props.store.editArticle.editorExtraControlType = 'NONE';
     else
-      this.props.setEditorExtraControls(editorExtraControlTypes.IMAGE);
+      this.props.store.editArticle.editorExtraControlType = 'IMAGE';
   }
   _onCreateImage(e, value) {
 
@@ -439,7 +486,7 @@ class MyEditor extends React.Component {
       var col = (rowCol.split(' '))[1];
       if(row == parseInt(row, 10) && col == parseInt(col, 10)) //have to use == here as only == considers 0 the same as '0'
       {
-        this.props.switchContentSection(this.props.row, this.props.col, row, col);
+        this.switchContentSection(this.props.row, this.props.col, row, col);
       }
       else
       {
@@ -477,8 +524,10 @@ class MyEditor extends React.Component {
 
 
   render() {
+    var inputData = this.props.store.editArticle;
+
     var header =
-    <div className='MyEditor' style={{visibility: this.props.id === this.props.editorFocusID ? 'visible' : 'hidden' }}>
+    <div className='MyEditor' style={{visibility: this.props.id === inputData.editorFocusID ? 'visible' : 'hidden' }}>
       {
         this.props.row > 0 &&
         <OverlayTrigger placement='top' overlay={<Tooltip id="tooltip">Move Row Up</Tooltip>} delayShow={200}>
@@ -561,7 +610,7 @@ class MyEditor extends React.Component {
       }>Imgur Test 2</Button>
       */}
       {
-        this.props.editorExtraControlType === editorExtraControlTypes.LINK && this.props.editorFocusID === this.props.id &&
+        inputData.editorExtraControlType === 'LINK' && inputData.editorFocusID === this.props.id &&
         <div>
           <Button onMouseDown={this.createLink}>Create Link</Button>
           <Button onMouseDown={this.removeLink}>Remove Link</Button>
@@ -569,7 +618,7 @@ class MyEditor extends React.Component {
         </div>
       }
       {
-        this.props.editorExtraControlType === editorExtraControlTypes.IMAGE && this.props.editorFocusID === this.props.id &&
+        inputData.editorExtraControlType === 'IMAGE' && inputData.editorFocusID === this.props.id &&
         <div>
           <Panel draggable='true' onDragOver={(e) => e.preventDefault()} onDrop={this.onDropImage}>
             <br/><br/><br/><br/>

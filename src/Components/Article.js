@@ -3,11 +3,15 @@ import '../Article.css';
 import {Button, Modal, Panel, Grid, Row, Col, Glyphicon, ButtonGroup, ToggleButton, ToggleButtonGroup, MenuItem, DropdownButton} from 'react-bootstrap';
 import ReactHTMLConverter from 'react-html-converter';
 import { pageValues, commentsFilterValues } from '../actions';
-import CommentEditorContainer from '../Containers/CommentEditorContainer';
-import CommentContainer from '../Containers/CommentContainer';
+import CommentEditor from '../Components/CommentEditor';
+import Comment from '../Components/Comment';
 //import renderHTML from 'react-render-html';
 import moment from 'moment';
 import { VIEW_ALL_COMMENTS_FOR_ARTICLE_URL, LIKE_ARTICLE_URL} from '../GeneralParameters';
+
+
+import {observer, inject} from 'mobx-react';
+
 
 
 function addImagesAndConvertToJSX(htmlString) {
@@ -85,6 +89,7 @@ function convertStringtoImageJSX(imgString) {
   return ImageJSX;
 }
 
+@observer
 class Article extends Component {
 
   constructor(props)
@@ -94,7 +99,6 @@ class Article extends Component {
     this.close = this._close.bind(this);
     this.open = this._open.bind(this);
     this.publish = this._publish.bind(this);
-    this.loadComments = this._loadComments.bind(this);
     this.loadDate = this._loadDate.bind(this);
     this.onFilterChange = this._onFilterChange.bind(this);
     this.likeArticle = this._likeArticle.bind(this);
@@ -112,58 +116,44 @@ class Article extends Component {
   }
 
   _close() {
-      this.props.setArticlePopup(this.props.id, false);
-      this.props.setShowComments(false);
-      this.props.resetCommentEditor();
+    console.log('close');
+    if(this.props.id !== -1)
+    {
+      this.props.store.viewArticles.popup =  {'visible':false, 'articleID': this.props.id};
+      this.props.store.viewArticles.showComments = false;
+      this.props.store.commentEditor.resetCommentEditor();
     }
+    else
+    {
+      this.props.store.editArticle.popupType = 'NONE';
+    }
+  }
   _open() {
-      if(this.props.showPopup === false || this.props.showPopup === undefined)
-      {
-        console.log('open');
-        this.props.setLoadComments(true);
-        this.props.setArticlePopup(this.props.id, true);
-      }
+
+    if(this.props.store.viewArticles.popup.visible === false)
+    {
+      console.log('open');
+      //this.props.setLoadComments(true);
+      this.props.store.viewArticles.popup =  {'visible':true, 'articleID': this.props.id};
     }
+  }
 
   _publish() {
   }
-  _loadComments() {
-    fetch(VIEW_ALL_COMMENTS_FOR_ARTICLE_URL, {
-      method:'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        articleID: this.props.id,
-      })
-    })
-    .then((response) => response.json())
-    .then((responseJson) => {
-      var newComments = responseJson;
-
-      this.props.setComments(newComments);
-      this.props.setCommentsArticleID(this.props.id);
-      this.props.setShowComments(true);
-    })
-    .catch((error) => {
-      console.error(error);
-    });
-  }
   _loadDate() {
     var dateText = '';
-    if(this.props.publishedDate != null)
+    var article = this.props.store.data.articles[this.props.index];
+    if(article.publishedDate != null)
     {
       var time = moment.utc(this.props.publishedDate, 'YYYY-MM-DD HH:mm:ss'); //gets the time
       var time2 = time.local().format('Do MMMM YYYY [at] HH[:]mm a'); //converts it to the correct timezone and displays it
 
-      switch (this.props.published) {
+      switch (article.published) {
         case 0:
           dateText = 'Article was pushed back for editing by an editor on: ';
           break;
         case 1:
         dateText = 'Article was submited for publishing on: ';
-
           break;
         case 2:
         dateText = 'Publish Date: ';
@@ -178,13 +168,13 @@ class Article extends Component {
   _onFilterChange(eventKey) {
     switch (eventKey) {
       case 1:
-        this.props.setCommentsFilter(commentsFilterValues.MOST_LIKED);
+        this.props.store.viewArticles.commentsFilter = 'MOST_LIKED';
         break;
       case 2:
-      this.props.setCommentsFilter(commentsFilterValues.NEWEST);
+      this.props.store.viewArticles.commentsFilter = 'NEWEST';
         break;
       case 3:
-      this.props.setCommentsFilter(commentsFilterValues.OLDEST);
+      this.props.store.viewArticles.commentsFilter = 'OLDEST';
         break;
       default:
         break;
@@ -192,8 +182,9 @@ class Article extends Component {
   }
   _likeArticle()
   {
+    var article = this.props.store.data.articles[this.props.index];
     var likeValue = 1;
-    if(this.props.likeStatus === 'LIKED')
+    if(article.like === true)
       likeValue = -1;
 
     fetch(LIKE_ARTICLE_URL, {
@@ -213,9 +204,10 @@ class Article extends Component {
       if(responseJson['error'] == null)
       {
         if(likeValue === 1)
-          this.props.setLikeArticle(true);
+          article.like = true;
         else
-          this.props.setLikeArticle(false);
+          article.like = false;
+          article.likes += likeValue;
       }
     })
     .catch((error) => {
@@ -225,19 +217,60 @@ class Article extends Component {
 
   _changeVisibleCommentEditor()
   {
-    if(this.props.showCommentEditor === true)
+    if(this.props.store.commentEditor.visible === true)
     {
-      this.props.setCommentVisibility(false);
-      this.props.resetCommentEditor();
+      this.props.store.commentEditor.visible = false;
+      this.props.store.commentEditor.resetCommentEditor();
     }
     else
     {
-      this.props.setCommentVisibility(true);
+      this.props.store.commentEditor.visible = true;
     }
   }
 
   render() {
-    var articleBody = this.props.content;
+    var store = this.props.store;
+    var article = [];
+    var articleBody;
+    var dateText = '';
+    if(this.props.id != -1)
+    {
+      article = this.props.store.data.articles[this.props.index];
+      articleBody = article.content;
+       dateText = this.loadDate();
+    }
+    else
+    {
+      console.log('article in editor');
+      article.title = this.props.store.editArticle.title;
+      article.teaser = this.props.store.editArticle.teaser;
+      article.author = this.props.store.user.username;
+      articleBody = this.props.store.editArticle.editorSectionsContent;
+    }
+
+    var showPopup = false;
+    if(store.viewArticles.popup.visible === true && store.viewArticles.popup.articleID === this.props.id || this.props.id === -1)
+      showPopup = true;
+
+    var currentPage = store.currentPage;
+    var editButton = false;
+    if((currentPage === 'VIEW_YOUR_ARTICLES' && article.published === 0) || //if it's your article and it hasn't been submited for publishing yet
+      currentPage === 'VIEW_ARTICLES_TO_BE_APPROVED' || currentPage === 'VIEW_PUBLISHED_ARTICLES_EDIT_MODE')
+        editButton = true;
+
+    var likeStatus = 'NONE';
+    var commentButton = false;
+    if(currentPage === 'VIEW_ARTICLES') //you can only like and comment in the view articles page
+    {
+      commentButton = true;
+      if(article.like === true)
+        likeStatus = 'LIKED';
+      else if(this.props.store.user.id !== article.user_id) //to prevent the user from liking there own articles
+        likeStatus = 'SHOW';
+    }
+
+
+
     //var maxLength = 200;
 
     var articlePreview = '';
@@ -247,8 +280,8 @@ class Article extends Component {
     {
       const converter = new ReactHTMLConverter();
       articlePreview = (converter.convert(articleBody[0][0])); //.substring(0, maxLength);
-      if(this.props.teaser != null)
-        articlePreview = this.props.teaser;
+      if(article.teaser != null)
+        articlePreview = article.teaser;
       outputArticle = [];
 
       var rows = articleBody.length;
@@ -273,7 +306,7 @@ class Article extends Component {
 
 
     var articleStyle = "primary"
-    switch (this.props.published) {
+    switch (article.published) {
       case 0:
         articleStyle = 'success';
         break;
@@ -288,60 +321,63 @@ class Article extends Component {
     }
 
     var cssStyle = {
-      visibility: this.props.hidden ? 'hidden' : 'visible',
+      visibility: this.props.id === -1 ? 'hidden' : 'visible',
+      visibiltiy: 'visible',
       wordWrap: 'break-word',
     };
 
     var likeStyle = 'default';
-    if(this.props.likeStatus === 'LIKED')
+    if(likeStatus === 'LIKED')
       likeStyle = 'success';
 
-    var dateText = this.loadDate();
-
-    var likeNumber = this.props.likes;
-    var comments = [];
+    var likeNumber = article.likes;
+    var displayComments = [];
     var filterText = '';
 
-    if(this.props.comments != null && this.props.showComments === true)
+    var comments = store.data.comments;
+    if(store.data.commentsArticleID == this.props.id && store.viewArticles.showComments === true && store.data.comments != null)
     {
-      switch (this.props.commentsFilter) {
-        case commentsFilterValues.MOST_LIKED:
+      switch (store.viewArticles.commentsFilter) {
+        case 'MOST_LIKED':
           filterText = 'Most Liked';
-          for(i = 0; i < this.props.comments.length; i++)
+          for(i = 0; i < comments.length; i++)
           {
-            comments[i]=<CommentContainer
-              key={this.props.comments[i]['id']}
+            displayComments[i]=<Comment
+              key={comments[i]['id']}
               index={i}
-              id={this.props.comments[i]['id']}
+              id={comments[i]['id']}
+              store={store}
             />;
           }
           let comment = this;
-          comments.sort(function(a, b){
-            if(comment.props.comments[a['props']['index']]['likes'] < comment.props.comments[b['props']['index']]['likes'])
+          displayComments.sort(function(a, b){
+            if(comments[a['props']['index']]['likes'] < comments[b['props']['index']]['likes'])
               return 1;
             else
               return -1;
           })
           break;
-        case commentsFilterValues.NEWEST:
+        case 'NEWEST':
           filterText = 'Newest';
-          for(i = this.props.comments.length - 1; i >= 0; i--)
+          for(i = comments.length - 1; i >= 0; i--)
           {
-            comments[this.props.comments.length - i - 1]=<CommentContainer
-              key={this.props.comments[i]['id']}
+            displayComments[comments.length - i - 1]=<Comment
+              key={comments[i]['id']}
               index={i}
-              id={this.props.comments[i]['id']}
+              id={comments[i]['id']}
+              store={store}
               />;
           }
           break;
         case commentsFilterValues.OLDEST:
           filterText = 'Oldest';
-          for(i = 0; i < this.props.comments.length; i++)
+          for(i = 0; i < comments.length; i++)
           {
-            comments[i]=<CommentContainer
-              key={this.props.comments[i]['id']}
+            displayComments[i]=<Comment
+              key={comments[i]['id']}
               index={i}
-              id={this.props.comments[i]['id']}
+              id={comments[i]['id']}
+              store={store}
             />;
           }
           break;
@@ -351,76 +387,79 @@ class Article extends Component {
     }
 
 
-    var headerText = this.props.title;
-
-    if(this.props.likes != null)
-      headerText = <Row><Col xs={3}></Col><Col xs={6}>{this.props.title}</Col><Col xs={3}><Glyphicon pullRight={true} glyph="thumbs-up"/> {likeNumber}</Col></Row>;
+    var headerText = article.title;
+    if(article.likes != null)
+      headerText = <Row><Col xs={3}></Col><Col xs={6}>{article.title}</Col><Col xs={3}><Glyphicon glyph="thumbs-up"/> {likeNumber}</Col></Row>;
 
     return (
-      <Panel header={headerText} onClick= {() => this.open()} bsStyle={articleStyle} style={cssStyle} className='Article'>
-        <div>
+      <div>
+        <Panel header={headerText} onClick= {() => this.open()} bsStyle={articleStyle} style={cssStyle} className='Article'>
           {articlePreview}
-          </div>
-              <Modal show={this.props.showPopup} onHide={this.close} bsSize="large">
-                <Modal.Header closeButton>
-                  <Modal.Title><p className='articleTitle'>{this.props.title}</p></Modal.Title>
-                  <Grid fluid={true}>
-                    <Row>
-                      <Col xs={6}>
-                        {dateText} <br/>Author: {this.props.author}
-                      </Col>
-                      <Col xs={6}>
-                        <div className='pull-right' ><Glyphicon glyph="thumbs-up"/> {likeNumber}</div>
-                      </Col>
-                    </Row>
-                  </Grid>
-                </Modal.Header>
-                <Modal.Body>
-                  <div>
-                    <Grid fluid = {true}>
-                      <div className='Article'>
-                        {outputArticle}
-                      </div>
-                    </Grid>
-                  </div>
-                </Modal.Body>
-                <Modal.Footer>
-                <ButtonGroup>
+        </Panel>
+        <Modal show={showPopup} onHide={this.close} bsSize="large">
+          <Modal.Header closeButton>
+            <Modal.Title><p className='articleTitle'>{article.title}</p></Modal.Title>
+            <Grid fluid={true}>
+              <Row>
+                <Col xs={6}>
+                  {dateText} <br/>Author: {article.author}
+                </Col>
+                <Col xs={6}>
                   {
-                    (this.props.likeStatus === 'SHOW' || this.props.likeStatus === 'LIKED') &&
-                    <Button bsStyle={likeStyle} onClick={this.likeArticle}><Glyphicon glyph="thumbs-up"/></Button>
+                    this.props.id !== -1 &&
+                    <div className='pull-right' ><Glyphicon glyph="thumbs-up"/> {likeNumber}</div>
                   }
-                  {
-                    this.props.commentButton === true &&
-                    <Button onClick = {this.changeVisibleCommentEditor}><Glyphicon glyph="comment"/></Button>
-                  }
-                  {
-                    this.props.editButton === true &&
-                    <Button onClick = {() => {this.props.resetEditArticle(); this.props.setPage(pageValues.EDIT_ARTICLE); this.close(); this.props.setArticleID(this.props.id);}}>Edit</Button>
-                  }
-                  {
-                    this.props.publishButton === true &&
-                    <Button>Publish</Button>
-                  }
-                  <Button onClick={this.close}>Close</Button>
-                </ButtonGroup>
-                {
-                  this.props.showCommentEditor &&
-                  <CommentEditorContainer />
-                }
-                <br />
-                {
-                  comments.length > 0 &&
-                  <DropdownButton title={filterText} type="button" onSelect={this.onFilterChange} name="options" defaultValue={2} id={-10}>
-                    <MenuItem eventKey={1}>Most Liked Comments</MenuItem>
-                    <MenuItem eventKey={2}>Newest Comments</MenuItem>
-                    <MenuItem eventKey={3}>Oldest Comments</MenuItem>
-                  </DropdownButton>
-                }
-                {comments}
-                </Modal.Footer>
-              </Modal>
-      </Panel>
+                </Col>
+              </Row>
+            </Grid>
+          </Modal.Header>
+          <Modal.Body>
+            <div>
+              <Grid fluid = {true}>
+                <div className='Article'>
+                  {outputArticle}
+                </div>
+              </Grid>
+            </div>
+          </Modal.Body>
+          <Modal.Footer>
+          <ButtonGroup>
+            {
+              (likeStatus === 'SHOW' || likeStatus === 'LIKED') &&
+              <Button bsStyle={likeStyle} onClick={this.likeArticle}><Glyphicon glyph="thumbs-up"/></Button>
+            }
+            {
+              commentButton === true &&
+              <Button onClick = {this.changeVisibleCommentEditor}><Glyphicon glyph="comment"/></Button>
+            }
+            {
+              editButton === true &&
+              <Button onClick = {() => {this.props.store.editArticle.resetEditArticle(); this.props.store.currentPage = 'EDIT_ARTICLE'; this.close(); this.props.store.editArticle.articleID = this.props.id;}}>Edit</Button>
+            }
+            {
+              //this is not currently used and was part of a planed feature to allow publishing without editing
+              this.props.publishButton === true &&
+              <Button>Publish</Button>
+            }
+            <Button onClick={this.close}>Close</Button>
+          </ButtonGroup>
+          {
+            this.props.store.commentEditor.visible &&
+            <CommentEditor store={this.props.store}/>
+          }
+          <br />
+          {
+            displayComments.length > 0 &&
+            <DropdownButton title={filterText} type="button" onSelect={this.onFilterChange} name="options" defaultValue={2} id={-10}>
+              <MenuItem eventKey={1}>Most Liked Comments</MenuItem>
+              <MenuItem eventKey={2}>Newest Comments</MenuItem>
+              <MenuItem eventKey={3}>Oldest Comments</MenuItem>
+            </DropdownButton>
+          }
+          {displayComments}
+          </Modal.Footer>
+        </Modal>
+      </div>
     );
   }
 }

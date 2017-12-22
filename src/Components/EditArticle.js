@@ -1,10 +1,10 @@
 import React, { Component } from 'react';
 import ReactDOM from 'react-dom';
-import MenuBarContainer from '../Containers/MenuBarContainer';
+import MenuBar from '../Components/MenuBar';
 import '../Main.css';
-import MyEditorContainer from '../Containers/MyEditorContainer';
-import ArticleContainer from '../Containers/ArticleContainer';
-import {Row, Col, Grid, Button, Modal, Panel, FormControl, Clearfix, Tooltip, Overlay, Fade} from 'react-bootstrap';
+import MyEditor from '../Components/MyEditor';
+import Article from '../Components/Article';
+import {Row, Col, Grid, Button, Modal, Panel, FormControl, Clearfix, Tooltip, Overlay, Fade, ButtonGroup} from 'react-bootstrap';
 import { editArticlePopups , pageValues, savingInfoTypes } from '../actions'
 import {
   AUTOSAVE_CHANGE_LIMIT,
@@ -19,6 +19,10 @@ import {
   PUBLISH_ARTICLE_URL,
   PUSH_BACK_ARTICLE_URL,
 } from '../GeneralParameters'
+
+import {observer} from 'mobx-react';
+
+@observer
 class EditArticle extends Component {
 
   constructor(props)
@@ -38,13 +42,14 @@ class EditArticle extends Component {
     this.toggleCreateSectionPopup = this._toggleCreateSectionPopup.bind(this);
     this.loadTemplate = this._loadTemplate.bind(this);
     this.titleTooltipTimeout = this._titleTooltipTimeout.bind(this);
+    this.addContentSection = this._addContentSection.bind(this);
     if(this.props.createMode !== true)
     {
       this.loadArticle();
     }
     else
     { //loads the template popup when a new artice is created
-        this.props.setPopupType(editArticlePopups.TEMPLATE_POPUP);
+        this.props.store.editArticle.popupType = 'TEMPLATE_POPUP';
     }
   }
 
@@ -54,7 +59,7 @@ class EditArticle extends Component {
     {
       clearTimeout(this.autsaveTimeout);
       //console.log(this.props.articleID);
-      if(this.props.articleID != null)
+      if(this.props.store.editArticle.articleID != null)
       {
         this.saveArticle(true);
       }
@@ -88,7 +93,8 @@ class EditArticle extends Component {
   _titleOnChange(e) {
     if(e.target.value.length === 255)
       alert('max character limit reached for title');
-    this.props.setTitle(e.target.value, true);
+    this.props.store.editArticle.title = e.target.value;
+    this.props.store.editArticle.autosaveCounter++;
   }
   _teaserOnChange(e) {
     var output = '';
@@ -126,12 +132,13 @@ class EditArticle extends Component {
       if(e.target.value.length === 255 || characterLimitReached)
       alert('max character limit reached for teaser Text');
       //this.setState({teaser: output});
-      this.props.setTeaser(output, true);
+      this.props.store.editArticle.teaser = output;
+      this.props.store.editArticle.autosaveCounter++;
   }
   _loadArticle() {
-    if(this.props.articleID != null) //load the article
+    if(this.props.store.editArticle.articleID != null) //load the article
     {
-      this.props.setEditArticleLoading(true);
+      this.props.store.editArticle.eEditArticleLoading = true;
       fetch(LOAD_ARTICLE_URL, {
         method:'POST',
         headers: {
@@ -139,7 +146,7 @@ class EditArticle extends Component {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          articleID: this.props.articleID,
+          articleID: this.props.store.editArticle.articleID,
         })
       })
       .then((response) => response.json())
@@ -155,12 +162,12 @@ class EditArticle extends Component {
             size = 1;
             newEditorSections.push(size);
         });
-        this.props.setTitle(title, false);
-        this.props.setTeaser(teaser, false);
-        this.props.setContent(content);
-        this.props.setEditArticlePublished(newPublished);
-        this.props.setUpdateEditors(true);
-        this.props.setEditArticleLoading(false);
+        this.props.store.editArticle.title = title;
+        this.props.store.editArticle.teaser = teaser;
+        this.props.store.editArticle.editorSectionsContent = content;
+        this.props.store.editArticle.published = newPublished;
+        this.props.store.editArticle.setUpdateAllEditors(true);
+        this.props.store.editArticle.loading = false;
       })
       .catch((error) => {
         console.error(error);
@@ -168,16 +175,16 @@ class EditArticle extends Component {
     }
   }
   _saveArticle(autosaving = false) {
-    if(this.props.title === '')
+    if(this.props.store.editArticle.title === '')
     {
-      this.props.setShowTitleTooltip(true);
+      this.props.store.editArticle.titleTooltip = true;
       return;
     }
 
-    if(this.props.articleID == null) //create new article
+    if(this.props.store.editArticle.articleID == null) //create new article
     {
-      this.props.setSavingInfo(savingInfoTypes.SAVING);
-
+      this.props.store.editArticle.savingInfoType = 'SAVING';
+      console.log(this.props.store.editArticle.teaser);
       fetch(CREATE_ARTICLE_URL, {
         method:'POST',
         headers: {
@@ -185,17 +192,17 @@ class EditArticle extends Component {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: this.props.title,
-          teaser: this.props.teaser,
-          content: JSON.stringify(this.props.editorSectionsContent),
+          name: this.props.store.editArticle.title,
+          teaser: this.props.store.editArticle.teaser,
+          content: JSON.stringify(this.props.store.editArticle.editorSectionsContent),
         })
       })
       .then((response) => response.json())
       .then((responseJson) => {
-        this.props.setArticleID(responseJson.id);
+        this.props.store.editArticle.articleID = responseJson.id;
         console.log(responseJson);
 
-        this.props.setSavingInfo(savingInfoTypes.SAVECOMPLETE);
+        this.props.store.editArticle.savingInfoType = 'SAVECOMPLETE';
         this.savingPopupTimeout();
       })
       .catch((error) => {
@@ -205,9 +212,9 @@ class EditArticle extends Component {
     else //save to esisting entry
     {
       if(autosaving)
-        this.props.setSavingInfo(savingInfoTypes.AUTOSAVING);
+        this.props.store.editArticle.savingInfoType = 'AUTOSAVING';
       else
-        this.props.setSavingInfo(savingInfoTypes.SAVING);
+        this.props.store.editArticle.savingInfoType = 'SAVING';
 
       fetch(EDIT_ARTICLE_URL, {
         method:'POST',
@@ -216,16 +223,17 @@ class EditArticle extends Component {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          articleID: this.props.articleID,
-          name: this.props.title,
-          teaser: this.props.teaser,
-          content: JSON.stringify(this.props.editorSectionsContent),
+          articleID: this.props.store.editArticle.articleID,
+          name: this.props.store.editArticle.title,
+          teaser: this.props.store.editArticle.teaser,
+          content: JSON.stringify(this.props.store.editArticle.editorSectionsContent),
         })
       })
       .then((response) => response.json())
       .then((responseJson) => {
         console.log(responseJson);
-        this.props.setSavingInfo(savingInfoTypes.SAVECOMPLETE);
+        this.props.store.editArticle.savingInfoType = 'SAVECOMPLETE';
+        console.log('should show saving popup')
         this.savingPopupTimeout();
       })
       .catch((error) => {
@@ -238,7 +246,7 @@ class EditArticle extends Component {
     var editArticle = this;
 
     setTimeout(function() {
-      editArticle.props.setSavingInfo(savingInfoTypes.NONE);
+      editArticle.props.store.editArticle.savingInfoType = 'NONE';
     }, 2000);
   }
   _deleteArticle() {
@@ -343,14 +351,14 @@ class EditArticle extends Component {
   }
 
   _toggleCreateSectionPopup() {
-    if(this.props.showCreateSectionButtons === false)
-      this.props.setShowCreateSectionButtons(true);
+    if(this.props.store.editArticle.showCreateSectionButtons === false)
+      this.props.store.editArticle.showCreateSectionButtons = true;
     else
-      this.props.setShowCreateSectionButtons(false);
+      this.props.store.editArticle.showCreateSectionButtons = false;
   }
   _loadTemplate(templateValue) {
     var content = [];
-    this.props.setPopupType(editArticlePopups.NONE);
+    this.props.store.editArticle.popupType = 'NONE';
     for(var i = 0; i < templateValue.length; i++)
     {
       if(templateValue[i] === 1)
@@ -366,22 +374,43 @@ class EditArticle extends Component {
         content.push(['<p><br></p>', '<p><br></p>', '<p><br></p>']);
       }
     }
-    this.props.setContent(content);
-    this.props.setUpdateEditors(true);
+    this.props.store.editArticle.editorSectionsContent = content;
+    this.props.store.editArticle.setUpdateAllEditors(false);
   }
-  _titleTooltipTimeout()
-  {
+  _titleTooltipTimeout() {
     var editor = this;
     setTimeout( function() {
-      editor.props.setShowTitleTooltip(false);
+      editor.props.store.editArticle.titleTooltip = false;
     }, 2000);
   }
+  _addContentSection(value)
+  {
+    switch (value) {
+      case 1:
+        this.props.store.editArticle.editorSectionsContent.push(['<p><br><p>']);
+        this.props.store.editArticle.updateEditorSectionsContent.push([false]);
+        break;
+      case 2:
+        this.props.store.editArticle.editorSectionsContent.push(['<p><br><p>','<p><br><p>']);
+        this.props.store.editArticle.updateEditorSectionsContent.push([false, false]);
+        break;
+      case 3:
+        this.props.store.editArticle.editorSectionsContent.push(['<p><br><p>', '<p><br><p>', '<p><br><p>']);
+        this.props.store.editArticle.updateEditorSectionsContent.push([false, false, false]);
+        break;
+      default:
+        break;
+    }
+  }
+
   render() {
 
+    var inputData = this.props.store.editArticle;
+
     var heading;
-    if(this.props.loading === true)
+    if(inputData.loading === true)
       heading = <h1>Loading</h1>;
-    else if(this.props.createMode === true)
+    else if(inputData.createMode === true)
       heading=<h1>Create Article</h1>;
     else
       heading=<h1>Edit Article</h1>;
@@ -390,48 +419,48 @@ class EditArticle extends Component {
     var id = 0;
     var editors = [];
 
-    if(this.props.loading === false)
+    if(inputData.loading === false)
     {
 
-      for(var i = 0; i < this.props.editorSectionsContent.length; i++)
+      for(var i = 0; i < inputData.editorSectionsContent.length; i++)
       {
         var lastRow = false;
-        if(i === this.props.editorSectionsContent.length - 1)
+        if(i === inputData.editorSectionsContent.length - 1)
           lastRow = true;
 
-          if(this.props.editorSectionsContent[i].length === 1)
+          if(inputData.editorSectionsContent[i].length === 1)
           {
             editors[i] =
             <Row className="show-grid" key={id}>
               <Col xs={12} key={id}>
-                <MyEditorContainer key={id} id={id++} row={i} col={0} lastCol={true} lastRow={lastRow} />
+                <MyEditor key={id} id={id++} row={i} col={0} lastCol={true} lastRow={lastRow} store={this.props.store}/>
               </Col>
             </Row>;
           }
-          else if(this.props.editorSectionsContent[i].length === 2)
+          else if(inputData.editorSectionsContent[i].length === 2)
           {
             editors[i] =
             <Row className="show-grid" key={id}>
               <Col xs={12} sm={6} key={id}>
-                <MyEditorContainer key={id} id={id++} row={i} col={0} lastCol={false} lastRow={lastRow} />
+                <MyEditor key={id} id={id++} row={i} col={0} lastCol={false} lastRow={lastRow} store={this.props.store}/>
               </Col>
               <Col xs={12} sm={6} key={id}>
-                <MyEditorContainer key={id} id={id++} row={i} col={1} lastCol={true} lastRow={lastRow} />
+                <MyEditor key={id} id={id++} row={i} col={1} lastCol={true} lastRow={lastRow} store={this.props.store}/>
               </Col>
             </Row>;
           }
-          else if(this.props.editorSectionsContent[i].length === 3)
+          else if(inputData.editorSectionsContent[i].length === 3)
           {
             editors[i] =
             <Row className="show-grid" key={id}>
               <Col xs={12}  sm={4} key={id}>
-                <MyEditorContainer key={id} id={id++} row={i} col={0} lastCol={false} lastRow={lastRow} />
+                <MyEditor key={id} id={id++} row={i} col={0} lastCol={false} lastRow={lastRow} store={this.props.store}/>
               </Col>
               <Col xs={12} sm={4} key={id}>
-                <MyEditorContainer key={id} id={id++} row={i} col={1} lastCol={false} lastRow={lastRow} />
+                <MyEditor key={id} id={id++} row={i} col={1} lastCol={false} lastRow={lastRow} store={this.props.store}/>
               </Col>
               <Col xs={12} sm={4} key={id}>
-                <MyEditorContainer key={id} id={id++} row={i} col={2} lastCol={true} lastRow={lastRow} />
+                <MyEditor key={id} id={id++} row={i} col={2} lastCol={true} lastRow={lastRow} store={this.props.store}/>
               </Col>
             </Row>;
           }
@@ -550,22 +579,22 @@ class EditArticle extends Component {
 
     return (
       <div className='EditArticle'>
-      <MenuBarContainer viewArticles={true}/>
+      <MenuBar viewArticles={true} store={this.props.store}/>
       {heading}
       <div>
         <Grid>
           <Row>
-            <Overlay target={() => ReactDOM.findDOMNode(this.refs.titleInput)} show={this.props.titleTooltip}  placement="top" onEntered={this.titleTooltipTimeout}>
+            <Overlay target={() => ReactDOM.findDOMNode(this.refs.titleInput)} show={this.props.store.editArticle.titleTooltip}  placement="top" onEntered={this.titleTooltipTimeout}>
             <Tooltip className='WarningTooltip' id={1}>
               Title Cannot Be Empty
             </Tooltip>
             </Overlay>
-            <input maxLength='255' value={this.props.title} onChange={this.titleOnChange} placeholder='Insert Title Here' ref='titleInput'></input>
+            <input maxLength='255' value={inputData.title} onChange={this.titleOnChange} placeholder='Insert Title Here' ref='titleInput'></input>
           </Row>
           <Row>
             <Col xs={6} xsOffset={3}>
             <Panel collapsible header="Teaser Text (optional)">
-              <FormControl componentClass='textarea' value={this.props.teaser} maxLength='255' rows="4" cols="50" placeholder='insert a short teaser for the article' onChange={this.teaserOnChange}/>
+              <FormControl componentClass='textarea' value={inputData.teaser} maxLength='255' rows="4" cols="50" placeholder='insert a short teaser for the article' onChange={this.teaserOnChange}/>
             </Panel>
             </Col>
           </Row>
@@ -578,32 +607,32 @@ class EditArticle extends Component {
         </Grid>
       </div>
       <Button onClick={this.toggleCreateSectionPopup}>Create Section</Button>
-      <Button onClick={() => {this.props.setPopupType(editArticlePopups.PREVIEW_POPUP); this.props.setShowTitleTooltip(false);}}>Preview</Button>
+      <Button onClick={() => {inputData.popupType = 'PREVIEW_POPUP'; inputData.titleTooltip = false;}}>Preview</Button>
       <Button onClick={() => this.saveArticle(false)}>Save</Button>
       {
         this.props.articleID !== null &&
-        <Button onClick={() => {this.props.setPopupType(editArticlePopups.DELETE_POPUP); this.props.setShowTitleTooltip(false);}}>Delete</Button>
+        <Button onClick={() => {this.props.setPopupType(editArticlePopups.DELETE_POPUP); inputData.titleTooltip = false;}}>Delete</Button>
       }
       {
         this.props.articleID !== null && this.props.published === 0 &&
-        <Button onClick={() => {this.props.setPopupType(editArticlePopups.SUBMIT_FOR_PUBLISHING_POPUP); this.props.setShowTitleTooltip(false);}}>Submit For Publishing</Button>
+        <Button onClick={() => {this.props.setPopupType(editArticlePopups.SUBMIT_FOR_PUBLISHING_POPUP); inputData.titleTooltip = false;}}>Submit For Publishing</Button>
       }
       {
         this.props.articleID !== null && this.props.published === 1 &&
-        <Button onClick={() => {this.props.setPopupType(editArticlePopups.PUSH_BACK_FOR_EDITING_POPUP); this.props.setShowTitleTooltip(false);}}>Push Back For Editing</Button>
+        <Button onClick={() => {this.props.setPopupType(editArticlePopups.PUSH_BACK_FOR_EDITING_POPUP); inputData.titleTooltip = false;}}>Push Back For Editing</Button>
       }
       {
         this.props.articleID !== null && this.props.published === 1 &&
-        <Button onClick={() => {this.props.setPopupType(editArticlePopups.PUBLISH_POPUP); this.props.setShowTitleTooltip(false);}}>Publish</Button>
+        <Button onClick={() => {this.props.setPopupType(editArticlePopups.PUBLISH_POPUP); inputData.titleTooltip = false;}}>Publish</Button>
       }
 
       {
-        this.props.showCreateSectionButtons === true &&
-        <div>
-          <Button onClick={() => {this.props.addContentSection(1)}}>One Column</Button>
-          <Button onClick={() => {this.props.addContentSection(2)}}>Two Columns</Button>
-          <Button onClick={() => {this.props.addContentSection(3)}}>Three Columns</Button>
-        </div>
+        this.props.store.editArticle.showCreateSectionButtons === true &&
+        <div><ButtonGroup>
+          <Button onClick={() => {this.addContentSection(1)}}>One Column</Button>
+          <Button onClick={() => {this.addContentSection(2)}}>Two Columns</Button>
+          <Button onClick={() => {this.addContentSection(3)}}>Three Columns</Button>
+        </ButtonGroup></div>
       }
       <Modal show={this.props.popupType === editArticlePopups.DELETE_POPUP} onHide={() => this.props.setPopupType(editArticlePopups.NONE)}>
         <Modal.Header closeButton>
@@ -657,7 +686,7 @@ class EditArticle extends Component {
         </Modal.Footer>
       </Modal>
 
-      <Modal show={this.props.popupType === editArticlePopups.TEMPLATE_POPUP} onHide={() => this.props.setPopupType(editArticlePopups.NONE)}>
+      <Modal show={inputData.popupType === 'TEMPLATE_POPUP'} onHide={() => inputData.popupType = 'NONE'}>
         <Modal.Header closeButton>
           <Modal.Title>Select a Template</Modal.Title>
         </Modal.Header>
@@ -732,16 +761,16 @@ class EditArticle extends Component {
         <Modal.Footer>
         </Modal.Footer>
       </Modal>
-      <Fade in={this.props.savingInfoType !== savingInfoTypes.NONE}>
+      <Fade in={inputData.savingInfoType !== 'NONE'}>
       <Panel style={{position: 'fixed', top: 20, right: 20}}>
-        {this.props.savingInfoType === savingInfoTypes.SAVING && <p>saving...</p>}
-        {this.props.savingInfoType === savingInfoTypes.SAVECOMPLETE && <p>save complete</p>}
-        {this.props.savingInfoType === savingInfoTypes.AUTOSAVING && <p>autosaving...</p>}
+        {inputData.savingInfoType === 'SAVING' && <p>saving...</p>}
+        {inputData.savingInfoType === 'SAVECOMPLETE' && <p>save complete</p>}
+        {inputData.savingInfoType === 'AUTOSAVING' && <p>autosaving...</p>}
       </Panel>
     </Fade>
       {
-          this.props.popupType === editArticlePopups.PREVIEW_POPUP &&
-          <ArticleContainer hidden={true} id={-1}/>
+          inputData.popupType === 'PREVIEW_POPUP' &&
+          <Article hidden={true} id={-1} store={this.props.store}/>
       }
       </div>
     );
